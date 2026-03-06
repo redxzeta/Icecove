@@ -1,0 +1,25 @@
+[package]
+name = "alcove"
+version = "0.3.0"
+edition = "2021"
+description = "A quiet place for your project docs. MCP server that gives AI agents scoped access to private documentation."
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/epicsagas/alcove"
+keywords = ["mcp", "documentation", "ai", "cli"]
+categories = ["command-line-utilities", "development-tools"]
+
+[[bin]]
+name = "alcove"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+dialoguer = { version = "0.11", features = ["fuzzy-select"] }
+console = "0.15"
+dirs = "6"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "1"
+toml = "0.8"
+walkdir = "2"
