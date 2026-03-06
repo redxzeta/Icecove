@@ -6,7 +6,7 @@ use console::style;
 use dialoguer::{Input, MultiSelect, Select, theme::ColorfulTheme};
 use rust_i18n::t;
 
-use crate::{
+use crate::config::{
     config_path, load_config, DocConfig,
     DOC_REPO_REQUIRED, DOC_REPO_SUPPLEMENTARY, PROJECT_REPO_FILES,
 };
@@ -553,6 +553,101 @@ pub fn cmd_uninstall() -> Result<()> {
     println!();
 
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// validate
+// ---------------------------------------------------------------------------
+
+pub fn cmd_validate(format: &str, exit_code: bool) -> Result<()> {
+    use crate::policy;
+    use crate::tools;
+
+    let docs_root = match saved_docs_root() {
+        Some(p) => p,
+        None => {
+            anyhow::bail!("docs_root is not configured. Run `alcove setup` first.");
+        }
+    };
+
+    let resolved = match tools::resolve_project(&docs_root) {
+        Some(r) => r,
+        None => {
+            anyhow::bail!(
+                "Could not detect project. Run from within a project directory or set MCP_PROJECT_NAME."
+            );
+        }
+    };
+
+    let repo_path = resolved.repo_path.as_deref();
+    let source = policy::policy_source(&docs_root, &resolved.name);
+    let (pol, results) = policy::validate(&docs_root, &resolved.name, repo_path)?;
+
+    if format == "json" {
+        let json = policy::validation_to_json(&pol, &results, source);
+        println!("{}", serde_json::to_string_pretty(&json)?);
+    } else {
+        print_validation_human(&pol, &results, source, &resolved.name);
+    }
+
+    if exit_code {
+        let has_fail = results.iter().any(|r| r.status == policy::FileStatus::Fail);
+        if has_fail && pol.policy.enforce == "strict" {
+            std::process::exit(1);
+        }
+    }
+
+    Ok(())
+}
+
+fn print_validation_human(
+    pol: &crate::policy::PolicyFile,
+    results: &[crate::policy::ValidationResult],
+    source: &str,
+    project_name: &str,
+) {
+    use crate::policy::FileStatus;
+
+    println!();
+    println!(
+        "{}",
+        style(format!("Document Policy: {} (source: {source})", pol.policy.enforce)).bold()
+    );
+    println!("{}", style(format!("Project: {project_name}")).dim());
+    println!();
+
+    for r in results {
+        let icon = match r.status {
+            FileStatus::Pass => style("  PASS").green(),
+            FileStatus::Warn => style("  WARN").yellow(),
+            FileStatus::Fail => style("  FAIL").red(),
+        };
+        let reason = r.reason.as_deref().map(|s| format!(" — {s}")).unwrap_or_default();
+        println!("{icon} {}{reason}", r.file);
+
+        for s in &r.sections {
+            let sec_icon = match s.status {
+                FileStatus::Pass => style("    PASS").green(),
+                FileStatus::Warn => style("    WARN").yellow(),
+                FileStatus::Fail => style("    FAIL").red(),
+            };
+            let detail = s.detail.as_deref().map(|d| format!(" ({d})")).unwrap_or_default();
+            println!("{sec_icon} {}{detail}", s.heading);
+        }
+    }
+
+    let pass = results.iter().filter(|r| r.status == FileStatus::Pass).count();
+    let warn = results.iter().filter(|r| r.status == FileStatus::Warn).count();
+    let fail = results.iter().filter(|r| r.status == FileStatus::Fail).count();
+
+    println!();
+    println!(
+        "Summary: {} passed, {} warning, {} error",
+        style(pass).green(),
+        style(warn).yellow(),
+        style(fail).red(),
+    );
+    println!();
 }
 
 // ---------------------------------------------------------------------------
