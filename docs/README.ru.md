@@ -1,0 +1,209 @@
+<p align="center">
+  <img src="../alcove.png" alt="Alcove" width="100%" />
+</p>
+
+<p align="center">Тихое место для документации вашего проекта.</p>
+
+<p align="center">
+  <a href="../README.md">English</a> ·
+  <a href="README.ko.md">한국어</a> ·
+  <a href="README.ja.md">日本語</a> ·
+  <a href="README.zh-CN.md">简体中文</a> ·
+  <a href="README.es.md">Español</a> ·
+  <a href="README.hi.md">हिन्दी</a> ·
+  <a href="README.pt-BR.md">Português</a> ·
+  <a href="README.de.md">Deutsch</a> ·
+  <a href="README.fr.md">Français</a> ·
+  <a href="README.ru.md">Русский</a>
+</p>
+
+<p align="center">
+  <a href="https://crates.io/crates/alcove"><img src="https://img.shields.io/crates/v/alcove.svg" alt="crates.io" /></a>
+  <a href="https://crates.io/crates/alcove"><img src="https://img.shields.io/crates/d/alcove.svg" alt="Downloads" /></a>
+  <a href="../LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License" /></a>
+  <a href="https://buymeacoffee.com/epicsaga"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-FFDD00?style=flat&logo=buy-me-a-coffee&logoColor=black" alt="Buy Me a Coffee" /></a>
+</p>
+
+Alcove — это MCP-сервер, который предоставляет ИИ-агентам для кодирования ограниченный доступ только для чтения к документации вашего частного проекта — без утечки в публичные репозитории.
+
+## Проблема
+
+У вас есть внутренние документы — PRD, архитектурные решения, руководства по развёртыванию, карты секретов — которые не должны находиться в вашем GitHub-репозитории. Но ваш ИИ-агент не может помочь вам, если не может их прочитать.
+
+Alcove располагается между вашими частными документами и ИИ-агентами. Он автоматически определяет, над каким проектом вы работаете, по CWD вашего терминала и передаёт только документы этого проекта через протокол MCP.
+
+```
+~/projects/my-app $ claude "как реализована аутентификация?"
+
+  → Alcove определяет проект: my-app
+  → Читает ~/documents/my-app/ARCHITECTURE.md
+  → Агент отвечает с реальным контекстом проекта
+```
+
+## Основные возможности
+
+- **Автоопределение проекта** — на основе CWD, без настройки для каждого проекта
+- **Ограниченный доступ** — каждый проект видит только свои документы
+- **Конфиденциальность по дизайну** — документы остаются в вашем локальном хранилище, никогда не раскрываются
+- **Кросс-репозиторный аудит** — находит внутренние документы, случайно отправленные на GitHub, и предлагает исправления
+- **Работает с 8+ агентами** — Claude Code, Cursor, Claude Desktop, Cline, OpenCode, Codex, Antigravity, Gemini CLI
+
+## Быстрый старт
+
+```bash
+cargo install alcove
+alcove setup
+```
+
+Вот и всё. `setup` проведёт вас через всё интерактивно:
+
+1. Где находятся ваши документы
+2. Какие категории документов отслеживать
+3. Предпочтительный формат диаграмм
+4. Какие ИИ-агенты настроить (MCP + файлы навыков)
+
+Перезапустите `alcove setup` в любое время для изменения настроек. Он запоминает ваши предыдущие выборы.
+
+## Установка из исходников
+
+```bash
+git clone https://github.com/epicsagas/alcove.git
+cd alcove
+make install
+```
+
+## Как это работает
+
+```mermaid
+flowchart LR
+    subgraph Projects["Ваши проекты"]
+        A1["my-app/\n  src/ ..."]
+        A2["my-api/\n  src/ ..."]
+    end
+
+    subgraph Docs["Ваши частные документы"]
+        D1["my-app/\n  PRD.md\n  ARCH.md"]
+        D2["my-api/\n  PRD.md\n  ..."]
+    end
+
+    subgraph MCP["MCP-сервер Alcove"]
+        T1(overview)
+        T2(search)
+        T3(get_file)
+        T4(audit)
+        T5(init)
+        T6(list)
+    end
+
+    A1 -- "CWD определён" --> D1
+    A2 -- "CWD определён" --> D2
+    MCP -- "чтение" --> D1
+    MCP -- "чтение" --> D2
+```
+
+Документы организованы в отдельном каталоге (`DOCS_ROOT`). Alcove читает оттуда и передаёт вашему ИИ-агенту через stdio-протокол MCP. Агент вызывает инструменты вроде `get_doc_file("PRD.md")` и получает ответы, специфичные для проекта.
+
+## Классификация документов
+
+Alcove классифицирует документы на три уровня:
+
+| Классификация | Расположение | Примеры |
+|--------------|-------------|---------|
+| **doc-repo-required** | Alcove (частный) | PRD, Architecture, Decisions, Conventions |
+| **doc-repo-supplementary** | Alcove (частный) | Deployment, Onboarding, Testing, Runbook |
+| **project-repo** | GitHub-репозиторий (публичный) | README, CHANGELOG, CONTRIBUTING |
+
+Инструмент `audit` проверяет оба расположения и предлагает действия — например, создание публичного README из вашего частного PRD или перенос неправильно размещённых отчётов обратно в alcove.
+
+## Инструменты MCP
+
+| Инструмент | Функция |
+|-----------|---------|
+| `get_project_docs_overview` | Список всех документов с классификацией и размерами |
+| `search_project_docs` | Поиск по ключевым словам во всех документах проекта |
+| `get_doc_file` | Чтение конкретного документа по пути |
+| `list_projects` | Показать все проекты в хранилище документов |
+| `audit_project` | Кросс-репозиторный аудит с предложенными действиями |
+| `init_project` | Создание структуры документов для нового проекта из шаблона |
+
+## CLI
+
+```
+alcove              Запустить MCP-сервер (агенты вызывают это)
+alcove setup        Интерактивная настройка — перезапустите для переконфигурации
+alcove uninstall    Удалить навыки, конфигурацию и устаревшие файлы
+```
+
+## Конфигурация
+
+Конфигурация находится в `~/.config/alcove/config.toml`:
+
+```toml
+docs_root = "/Users/you/documents"
+
+[core]
+files = ["PRD.md", "ARCHITECTURE.md", "PROGRESS.md", "DECISIONS.md", "CONVENTIONS.md", "SECRETS_MAP.md", "DEBT.md"]
+
+[team]
+files = ["ENV_SETUP.md", "ONBOARDING.md", "DEPLOYMENT.md", "TESTING.md", ...]
+
+[public]
+files = ["README.md", "CHANGELOG.md", "CONTRIBUTING.md", "SECURITY.md", ...]
+
+[diagram]
+format = "mermaid"
+```
+
+Все настройки выполняются интерактивно через `alcove setup`. Вы также можете редактировать файл напрямую.
+
+## Обновление
+
+```bash
+cargo install alcove
+```
+
+## Удаление
+
+```bash
+alcove uninstall          # удалить навыки и конфигурацию
+cargo uninstall alcove    # удалить бинарный файл
+```
+
+## Поддерживаемые агенты
+
+| Агент | MCP | Навык |
+|-------|-----|-------|
+| Claude Code | `~/.claude.json` | `~/.claude/skills/alcove/` |
+| Cursor | `~/.cursor/mcp.json` | `~/.cursor/skills/alcove/` |
+| Claude Desktop | конфигурация платформы | — |
+| Cline (VS Code) | VS Code globalStorage | — |
+| OpenCode | `~/.config/opencode/opencode.json` | `~/.opencode/skills/alcove/` |
+| Codex CLI | `~/.codex/config.toml` | — |
+| Antigravity | `~/.antigravity/settings.json` | — |
+| Gemini CLI | `~/.gemini/settings.json` | `~/.gemini/skills/alcove/` |
+
+## Поддерживаемые языки
+
+CLI автоматически определяет локаль вашей системы. Вы также можете переопределить её с помощью переменной окружения `ALCOVE_LANG`.
+
+| Язык | Код |
+|------|-----|
+| English | `en` |
+| 한국어 | `ko` |
+| 简体中文 | `zh-CN` |
+| 日本語 | `ja` |
+| Español | `es` |
+| हिन्दी | `hi` |
+| Português (Brasil) | `pt-BR` |
+| Deutsch | `de` |
+| Français | `fr` |
+| Русский | `ru` |
+
+```bash
+# Переопределить язык
+ALCOVE_LANG=ru alcove setup
+```
+
+## Лицензия
+
+Apache-2.0
