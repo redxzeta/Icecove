@@ -1,0 +1,35 @@
+# 한국어
+
+# setup
+setup.title = "alcove 설정"
+setup.docs_repo = "문서 저장소"
+setup.docs_prompt = "문서 저장소 경로"
+setup.docs_root_set = "DOCS_ROOT → %{path}"
+setup.invalid_path = "잘못된 경로: %{path}"
+setup.categories = "문서 카테고리"
+setup.diagram = "다이어그램 형식"
+setup.diagram_prompt = "선호하는 다이어그램 형식"
+setup.diagram_set = "다이어그램: %{format}"
+setup.agents = "에이전트 설정"
+setup.agents_prompt = "설정할 에이전트 선택"
+setup.done = "완료"
+setup.binary = "바이너리: %{path}"
+setup.config = "설정:     %{path}"
+setup.docs = "문서:     %{path}"
+setup.hint_update = "업데이트:  cargo install alcove"
+setup.hint_uninstall = "제거:      alcove uninstall"
+setup.config_saved = "설정 → %{path}"
+setup.category_status = "%{label}: %{selected}/%{total}"
+setup.mcp_set = "MCP → %{path}"
+setup.skill_set = "스킬 → %{path}"
+
+# uninstall
+uninstall.title = "alcove 제거 중..."
+uninstall.removed_skill = "스킬 제거: %{path}"
+uninstall.removed_config = "설정 제거: %{path}"
+uninstall.removed_legacy = "레거시 설정 제거: %{path}"
+uninstall.binary_hint = "바이너리 미제거 — 실행: cargo uninstall alcove"
+uninstall.mcp_hint = "에디터 MCP 설정은 수동으로 정리하세요:"
+
+# about
+about = "프로젝트 문서 관리 & MCP 서버"

@@ -1,0 +1,35 @@
+# Русский
+
+# setup
+setup.title = "настройка alcove"
+setup.docs_repo = "Репозиторий документов"
+setup.docs_prompt = "Путь к репозиторию документов"
+setup.docs_root_set = "DOCS_ROOT → %{path}"
+setup.invalid_path = "Неверный путь: %{path}"
+setup.categories = "Категории документов"
+setup.diagram = "Формат диаграмм"
+setup.diagram_prompt = "Предпочитаемый формат диаграмм"
+setup.diagram_set = "Диаграмма: %{format}"
+setup.agents = "Настройка агентов"
+setup.agents_prompt = "Выберите агентов для настройки"
+setup.done = "Готово"
+setup.binary = "Программа:    %{path}"
+setup.config = "Конфигурация: %{path}"
+setup.docs = "Документы:    %{path}"
+setup.hint_update = "Обновить:     cargo install alcove"
+setup.hint_uninstall = "Удалить:      alcove uninstall"
+setup.config_saved = "Конфигурация → %{path}"
+setup.category_status = "%{label}: %{selected}/%{total}"
+setup.mcp_set = "MCP → %{path}"
+setup.skill_set = "Навык → %{path}"
+
+# uninstall
+uninstall.title = "Удаление alcove..."
+uninstall.removed_skill = "Навык удалён: %{path}"
+uninstall.removed_config = "Конфигурация удалена: %{path}"
+uninstall.removed_legacy = "Устаревшая конфигурация удалена: %{path}"
+uninstall.binary_hint = "Программа не удалена — выполните: cargo uninstall alcove"
+uninstall.mcp_hint = "Конфигурации MCP редакторов не удалены — очистите вручную:"
+
+# about
+about = "Управление документацией проекта и MCP-сервер"

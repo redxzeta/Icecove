@@ -4,6 +4,7 @@ use std::path::{Path, PathBuf};
 use anyhow::Result;
 use console::style;
 use dialoguer::{Input, MultiSelect, Select, theme::ColorfulTheme};
+use rust_i18n::t;
 
 use crate::{
     config_path, load_config, DocConfig,
@@ -137,19 +138,20 @@ fn saved_docs_root() -> Option<PathBuf> {
 /// Interactive prompt for docs root. Shows `default` as pre-filled value if provided.
 fn prompt_docs_root(default: Option<&Path>) -> Result<PathBuf> {
     let theme = ColorfulTheme::default();
+    let prompt = t!("setup.docs_prompt");
     let input: String = match default {
         Some(d) => Input::with_theme(&theme)
-            .with_prompt("Documents repository path")
+            .with_prompt(prompt.as_ref())
             .default(d.to_string_lossy().into_owned())
             .interact_text()?,
         None => Input::with_theme(&theme)
-            .with_prompt("Documents repository path")
+            .with_prompt(prompt.as_ref())
             .interact_text()?,
     };
 
     let p = PathBuf::from(shellexpand(&input));
     if !p.is_dir() {
-        anyhow::bail!("Invalid path: {}", p.display());
+        anyhow::bail!("{}", t!("setup.invalid_path", path = p.display()));
     }
 
     save_docs_root(&p)?;
@@ -383,11 +385,9 @@ fn select_categories() -> Result<(Vec<String>, Vec<String>, Vec<String>)> {
 
         let files: Vec<String> = selected.iter().map(|&idx| items[idx].to_string()).collect();
         println!(
-            "  {} {}: {}/{}",
+            "  {} {}",
             style("✓").green(),
-            cat.label,
-            files.len(),
-            items.len()
+            t!("setup.category_status", label = cat.label, selected = files.len(), total = items.len())
         );
         results.push(files);
     }
@@ -417,23 +417,23 @@ fn load_fresh_config() -> Option<DocConfig> {
 pub fn cmd_setup() -> Result<()> {
     println!();
     println!("{}", style("══════════════════════════════════════").bold());
-    println!("{}", style("  alcove setup").bold());
+    println!("  {}", style(t!("setup.title")).bold());
     println!("{}", style("══════════════════════════════════════").bold());
 
     // 1. Docs root
     println!();
-    println!("{}", style("── Documents Repository ──").bold());
+    println!("{}", style(format!("── {} ──", t!("setup.docs_repo"))).bold());
     let docs_root = resolve_docs_root_interactive()?;
-    println!("  {} DOCS_ROOT → {}", style("✓").green(), docs_root.display());
+    println!("  {} {}", style("✓").green(), t!("setup.docs_root_set", path = docs_root.display()));
 
     // 2. Document categories
     println!();
-    println!("{}", style("── Document Categories ──").bold());
+    println!("{}", style(format!("── {} ──", t!("setup.categories"))).bold());
     let (core_files, team_files, public_files) = select_categories()?;
 
     // 3. Diagram format
     println!();
-    println!("{}", style("── Diagram Format ──").bold());
+    println!("{}", style(format!("── {} ──", t!("setup.diagram"))).bold());
     let existing_diagram = load_fresh_config()
         .map(|c| c.diagram_format())
         .unwrap_or_default();
@@ -443,20 +443,20 @@ pub fn cmd_setup() -> Result<()> {
         .unwrap_or(0);
     let format_labels: Vec<&str> = DIAGRAM_FORMATS.iter().map(|(_, l)| *l).collect();
     let diagram_idx = Select::with_theme(&ColorfulTheme::default())
-        .with_prompt("Preferred diagram format")
+        .with_prompt(t!("setup.diagram_prompt").as_ref())
         .items(&format_labels)
         .default(diagram_default)
         .interact()?;
     let diagram_format = DIAGRAM_FORMATS[diagram_idx].0;
-    println!("  {} Diagram: {}", style("✓").green(), diagram_format);
+    println!("  {} {}", style("✓").green(), t!("setup.diagram_set", format = diagram_format));
 
     // 4. Save config
     save_full_config(&docs_root, diagram_format, &core_files, &team_files, &public_files)?;
 
     // 4. Agent setup
     println!();
-    println!("{}", style("── Agent Configuration ──").bold());
-    let selected = select_agents("Select agents to configure")?;
+    println!("{}", style(format!("── {} ──", t!("setup.agents"))).bold());
+    let selected = select_agents(&t!("setup.agents_prompt"))?;
     let agent_list = agents();
     let bin = binary_path();
 
@@ -470,17 +470,17 @@ pub fn cmd_setup() -> Result<()> {
             McpConfig::Json { path, server_key } => {
                 let p = expand_path(path);
                 write_json_mcp(&p, server_key, &bin, &docs_root)?;
-                println!("  {} MCP → {}", style("✓").green(), path);
+                println!("  {} {}", style("✓").green(), t!("setup.mcp_set", path = path));
             }
             McpConfig::OpenCode { path } => {
                 let p = expand_path(path);
                 write_opencode_mcp(&p, &bin, &docs_root)?;
-                println!("  {} MCP → {}", style("✓").green(), path);
+                println!("  {} {}", style("✓").green(), t!("setup.mcp_set", path = path));
             }
             McpConfig::Codex { path } => {
                 let p = expand_path(path);
                 write_codex_mcp(&p, &bin, &docs_root)?;
-                println!("  {} MCP → {}", style("✓").green(), path);
+                println!("  {} {}", style("✓").green(), t!("setup.mcp_set", path = path));
             }
         }
 
@@ -488,19 +488,19 @@ pub fn cmd_setup() -> Result<()> {
         if let Some(skill_path) = agent.skill_dir {
             let p = expand_path(skill_path);
             install_skill_to(&p)?;
-            println!("  {} Skill → {}", style("✓").green(), skill_path);
+            println!("  {} {}", style("✓").green(), t!("setup.skill_set", path = skill_path));
         }
     }
 
     // 5. Summary
     println!();
-    println!("{}", style("── Done ──").bold());
-    println!("  Binary:  {}", binary_path().display());
-    println!("  Config:  {}", config_path().display());
-    println!("  Docs:    {}", docs_root.display());
+    println!("{}", style(format!("── {} ──", t!("setup.done"))).bold());
+    println!("  {}", t!("setup.binary", path = binary_path().display()));
+    println!("  {}", t!("setup.config", path = config_path().display()));
+    println!("  {}", t!("setup.docs", path = docs_root.display()));
     println!();
-    println!("  {}", style("Update:    cargo install alcove").dim());
-    println!("  {}", style("Uninstall: alcove uninstall").dim());
+    println!("  {}", style(t!("setup.hint_update").to_string()).dim());
+    println!("  {}", style(t!("setup.hint_uninstall").to_string()).dim());
     println!();
 
     Ok(())
@@ -508,7 +508,7 @@ pub fn cmd_setup() -> Result<()> {
 
 pub fn cmd_uninstall() -> Result<()> {
     println!();
-    println!("{}", style("Uninstalling alcove...").bold());
+    println!("{}", style(t!("uninstall.title").to_string()).bold());
     println!();
 
     // Skills
@@ -522,7 +522,7 @@ pub fn cmd_uninstall() -> Result<()> {
         let p = expand_path(d);
         if p.exists() {
             fs::remove_dir_all(&p)?;
-            println!("  {} Removed skill: {}", style("✓").green(), d);
+            println!("  {} {}", style("✓").green(), t!("uninstall.removed_skill", path = d));
         }
     }
 
@@ -530,19 +530,19 @@ pub fn cmd_uninstall() -> Result<()> {
     let cfg = config_path();
     if cfg.exists() {
         fs::remove_file(&cfg)?;
-        println!("  {} Removed config: {}", style("✓").green(), cfg.display());
+        println!("  {} {}", style("✓").green(), t!("uninstall.removed_config", path = cfg.display()));
     }
     // Legacy config
     let legacy = cfg.with_file_name("config");
     if legacy.exists() {
         fs::remove_file(&legacy)?;
-        println!("  {} Removed legacy config: {}", style("✓").green(), legacy.display());
+        println!("  {} {}", style("✓").green(), t!("uninstall.removed_legacy", path = legacy.display()));
     }
 
     println!();
-    println!("  {}", style("Binary not removed — run: cargo uninstall alcove").yellow());
+    println!("  {}", style(t!("uninstall.binary_hint").to_string()).yellow());
     println!();
-    println!("  Editor MCP configs not removed — clean up manually:");
+    println!("  {}", t!("uninstall.mcp_hint"));
     println!("    Claude Code:    ~/.claude.json");
     println!("    Cursor:         ~/.cursor/mcp.json");
     println!("    Claude Desktop: ~/Library/Application Support/Claude/claude_desktop_config.json");
@@ -584,6 +584,6 @@ fn save_full_config(
     );
     fs::write(&cfg_path, content)?;
 
-    println!("  {} Config → {}", style("✓").green(), cfg_path.display());
+    println!("  {} {}", style("✓").green(), t!("setup.config_saved", path = cfg_path.display()));
     Ok(())
 }

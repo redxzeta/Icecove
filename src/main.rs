@@ -11,12 +11,37 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use walkdir::WalkDir;
 
+rust_i18n::i18n!("locales", fallback = "en");
+
+/// Detect system locale and set i18n language.
+/// Supports: en, ko, zh-CN, ja, es, hi, pt-BR, de, fr, ru
+fn init_locale() {
+    // ALCOVE_LANG env var takes priority over system locale
+    let locale = env::var("ALCOVE_LANG")
+        .ok()
+        .or_else(sys_locale::get_locale)
+        .unwrap_or_else(|| "en".to_string());
+    let lang = match locale.as_str() {
+        s if s.starts_with("ko") => "ko",
+        s if s.starts_with("zh") => "zh-CN",
+        s if s.starts_with("ja") => "ja",
+        s if s.starts_with("es") => "es",
+        s if s.starts_with("hi") => "hi",
+        s if s.starts_with("pt") => "pt-BR",
+        s if s.starts_with("de") => "de",
+        s if s.starts_with("fr") => "fr",
+        s if s.starts_with("ru") => "ru",
+        _ => "en",
+    };
+    rust_i18n::set_locale(lang);
+}
+
 // ---------------------------------------------------------------------------
 // CLI
 // ---------------------------------------------------------------------------
 
 #[derive(Parser)]
-#[command(name = "alcove", version, about = "Project documentation management & MCP server")]
+#[command(name = "alcove", version)]
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
@@ -94,7 +119,14 @@ struct ToolDescription {
 // ---------------------------------------------------------------------------
 
 fn main() -> Result<()> {
-    let cli = Cli::parse();
+    init_locale();
+    let cli = {
+        use clap::{CommandFactory, FromArgMatches};
+        use rust_i18n::t;
+        let cmd = Cli::command().about(t!("about").to_string());
+        let mut matches = cmd.get_matches();
+        Cli::from_arg_matches_mut(&mut matches)?
+    };
 
     match cli.command {
         None => serve(),

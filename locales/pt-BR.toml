@@ -1,0 +1,35 @@
+# Português (Brasil)
+
+# setup
+setup.title = "configuração do alcove"
+setup.docs_repo = "Repositório de documentos"
+setup.docs_prompt = "Caminho do repositório de documentos"
+setup.docs_root_set = "DOCS_ROOT → %{path}"
+setup.invalid_path = "Caminho inválido: %{path}"
+setup.categories = "Categorias de documentos"
+setup.diagram = "Formato de diagrama"
+setup.diagram_prompt = "Formato de diagrama preferido"
+setup.diagram_set = "Diagrama: %{format}"
+setup.agents = "Configuração de agentes"
+setup.agents_prompt = "Selecione agentes para configurar"
+setup.done = "Concluído"
+setup.binary = "Binário:       %{path}"
+setup.config = "Configuração:  %{path}"
+setup.docs = "Documentos:    %{path}"
+setup.hint_update = "Atualizar:     cargo install alcove"
+setup.hint_uninstall = "Desinstalar:   alcove uninstall"
+setup.config_saved = "Configuração → %{path}"
+setup.category_status = "%{label}: %{selected}/%{total}"
+setup.mcp_set = "MCP → %{path}"
+setup.skill_set = "Skill → %{path}"
+
+# uninstall
+uninstall.title = "Desinstalando alcove..."
+uninstall.removed_skill = "Skill removido: %{path}"
+uninstall.removed_config = "Configuração removida: %{path}"
+uninstall.removed_legacy = "Configuração legacy removida: %{path}"
+uninstall.binary_hint = "Binário não removido — execute: cargo uninstall alcove"
+uninstall.mcp_hint = "Configurações MCP do editor não removidas — limpe manualmente:"
+
+# about
+about = "Gerenciamento de documentação de projetos e servidor MCP"

@@ -1,0 +1,35 @@
+# Deutsch
+
+# setup
+setup.title = "alcove Einrichtung"
+setup.docs_repo = "Dokumenten-Repository"
+setup.docs_prompt = "Pfad zum Dokumenten-Repository"
+setup.docs_root_set = "DOCS_ROOT → %{path}"
+setup.invalid_path = "Ungültiger Pfad: %{path}"
+setup.categories = "Dokumentenkategorien"
+setup.diagram = "Diagrammformat"
+setup.diagram_prompt = "Bevorzugtes Diagrammformat"
+setup.diagram_set = "Diagramm: %{format}"
+setup.agents = "Agenten-Konfiguration"
+setup.agents_prompt = "Zu konfigurierende Agenten auswählen"
+setup.done = "Fertig"
+setup.binary = "Programm:       %{path}"
+setup.config = "Konfiguration:  %{path}"
+setup.docs = "Dokumente:      %{path}"
+setup.hint_update = "Aktualisieren:  cargo install alcove"
+setup.hint_uninstall = "Deinstallieren: alcove uninstall"
+setup.config_saved = "Konfiguration → %{path}"
+setup.category_status = "%{label}: %{selected}/%{total}"
+setup.mcp_set = "MCP → %{path}"
+setup.skill_set = "Skill → %{path}"
+
+# uninstall
+uninstall.title = "alcove wird deinstalliert..."
+uninstall.removed_skill = "Skill entfernt: %{path}"
+uninstall.removed_config = "Konfiguration entfernt: %{path}"
+uninstall.removed_legacy = "Legacy-Konfiguration entfernt: %{path}"
+uninstall.binary_hint = "Programm nicht entfernt — ausführen: cargo uninstall alcove"
+uninstall.mcp_hint = "Editor-MCP-Konfigurationen nicht entfernt — manuell bereinigen:"
+
+# about
+about = "Projektdokumentation-Verwaltung & MCP-Server"

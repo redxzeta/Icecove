@@ -1,0 +1,35 @@
+# 日本語
+
+# setup
+setup.title = "alcove セットアップ"
+setup.docs_repo = "ドキュメントリポジトリ"
+setup.docs_prompt = "ドキュメントリポジトリのパス"
+setup.docs_root_set = "DOCS_ROOT → %{path}"
+setup.invalid_path = "無効なパス: %{path}"
+setup.categories = "ドキュメントカテゴリ"
+setup.diagram = "ダイアグラム形式"
+setup.diagram_prompt = "希望するダイアグラム形式"
+setup.diagram_set = "ダイアグラム: %{format}"
+setup.agents = "エージェント設定"
+setup.agents_prompt = "設定するエージェントを選択"
+setup.done = "完了"
+setup.binary = "バイナリ: %{path}"
+setup.config = "設定:     %{path}"
+setup.docs = "ドキュメント: %{path}"
+setup.hint_update = "更新:     cargo install alcove"
+setup.hint_uninstall = "削除:     alcove uninstall"
+setup.config_saved = "設定 → %{path}"
+setup.category_status = "%{label}: %{selected}/%{total}"
+setup.mcp_set = "MCP → %{path}"
+setup.skill_set = "スキル → %{path}"
+
+# uninstall
+uninstall.title = "alcove をアンインストール中..."
+uninstall.removed_skill = "スキル削除: %{path}"
+uninstall.removed_config = "設定削除: %{path}"
+uninstall.removed_legacy = "レガシー設定削除: %{path}"
+uninstall.binary_hint = "バイナリ未削除 — 実行: cargo uninstall alcove"
+uninstall.mcp_hint = "エディタのMCP設定は手動で削除してください:"
+
+# about
+about = "プロジェクトドキュメント管理 & MCPサーバー"

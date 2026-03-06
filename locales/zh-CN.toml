@@ -1,0 +1,35 @@
+# 简体中文
+
+# setup
+setup.title = "alcove 设置"
+setup.docs_repo = "文档仓库"
+setup.docs_prompt = "文档仓库路径"
+setup.docs_root_set = "DOCS_ROOT → %{path}"
+setup.invalid_path = "无效路径: %{path}"
+setup.categories = "文档分类"
+setup.diagram = "图表格式"
+setup.diagram_prompt = "首选图表格式"
+setup.diagram_set = "图表: %{format}"
+setup.agents = "代理配置"
+setup.agents_prompt = "选择要配置的代理"
+setup.done = "完成"
+setup.binary = "程序:   %{path}"
+setup.config = "配置:   %{path}"
+setup.docs = "文档:   %{path}"
+setup.hint_update = "更新:   cargo install alcove"
+setup.hint_uninstall = "卸载:   alcove uninstall"
+setup.config_saved = "配置 → %{path}"
+setup.category_status = "%{label}: %{selected}/%{total}"
+setup.mcp_set = "MCP → %{path}"
+setup.skill_set = "技能 → %{path}"
+
+# uninstall
+uninstall.title = "正在卸载 alcove..."
+uninstall.removed_skill = "已删除技能: %{path}"
+uninstall.removed_config = "已删除配置: %{path}"
+uninstall.removed_legacy = "已删除旧配置: %{path}"
+uninstall.binary_hint = "程序未删除 — 请运行: cargo uninstall alcove"
+uninstall.mcp_hint = "编辑器 MCP 配置未删除 — 请手动清理:"
+
+# about
+about = "项目文档管理与 MCP 服务器"

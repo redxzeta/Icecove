@@ -1,0 +1,35 @@
+# हिन्दी
+
+# setup
+setup.title = "alcove सेटअप"
+setup.docs_repo = "दस्तावेज़ रिपॉजिटरी"
+setup.docs_prompt = "दस्तावेज़ रिपॉजिटरी पथ"
+setup.docs_root_set = "DOCS_ROOT → %{path}"
+setup.invalid_path = "अमान्य पथ: %{path}"
+setup.categories = "दस्तावेज़ श्रेणियाँ"
+setup.diagram = "आरेख प्रारूप"
+setup.diagram_prompt = "पसंदीदा आरेख प्रारूप"
+setup.diagram_set = "आरेख: %{format}"
+setup.agents = "एजेंट कॉन्फ़िगरेशन"
+setup.agents_prompt = "कॉन्फ़िगर करने के लिए एजेंट चुनें"
+setup.done = "पूर्ण"
+setup.binary = "बाइनरी:    %{path}"
+setup.config = "कॉन्फ़िग:  %{path}"
+setup.docs = "दस्तावेज़:  %{path}"
+setup.hint_update = "अपडेट:     cargo install alcove"
+setup.hint_uninstall = "अनइंस्टॉल: alcove uninstall"
+setup.config_saved = "कॉन्फ़िग → %{path}"
+setup.category_status = "%{label}: %{selected}/%{total}"
+setup.mcp_set = "MCP → %{path}"
+setup.skill_set = "स्किल → %{path}"
+
+# uninstall
+uninstall.title = "alcove अनइंस्टॉल हो रहा है..."
+uninstall.removed_skill = "स्किल हटाया: %{path}"
+uninstall.removed_config = "कॉन्फ़िग हटाया: %{path}"
+uninstall.removed_legacy = "लेगेसी कॉन्फ़िग हटाया: %{path}"
+uninstall.binary_hint = "बाइनरी नहीं हटाया — चलाएँ: cargo uninstall alcove"
+uninstall.mcp_hint = "एडिटर MCP कॉन्फ़िग नहीं हटाए — मैन्युअल रूप से साफ़ करें:"
+
+# about
+about = "प्रोजेक्ट दस्तावेज़ प्रबंधन और MCP सर्वर"

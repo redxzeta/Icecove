@@ -169,6 +169,28 @@ cargo uninstall alcove    # remove binary
 | Antigravity | `~/.antigravity/settings.json` | — |
 | Gemini CLI | `~/.gemini/settings.json` | `~/.gemini/skills/alcove/` |
 
+## Supported languages
+
+The CLI automatically detects your system locale. You can also override it with the `ALCOVE_LANG` environment variable.
+
+| Language | Code |
+|----------|------|
+| English | `en` |
+| 한국어 | `ko` |
+| 简体中文 | `zh-CN` |
+| 日本語 | `ja` |
+| Español | `es` |
+| हिन्दी | `hi` |
+| Português (Brasil) | `pt-BR` |
+| Deutsch | `de` |
+| Français | `fr` |
+| Русский | `ru` |
+
+```bash
+# Override language
+ALCOVE_LANG=ko alcove setup
+```
+
 ## License
 
 Apache-2.0
