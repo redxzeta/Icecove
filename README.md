@@ -5,6 +5,14 @@
 <p align="center">A quiet place for your project docs.</p>
 
 <p align="center">
+  <a href="README.md">English</a> ·
+  <a href="docs/README.ko.md">한국어</a> ·
+  <a href="docs/README.ja.md">日本語</a> ·
+  <a href="docs/README.zh-CN.md">简体中文</a> ·
+  <a href="docs/README.es.md">Español</a>
+</p>
+
+<p align="center">
   <a href="https://crates.io/crates/alcove"><img src="https://img.shields.io/crates/v/alcove.svg" alt="crates.io" /></a>
   <a href="https://crates.io/crates/alcove"><img src="https://img.shields.io/crates/d/alcove.svg" alt="Downloads" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License" /></a>
