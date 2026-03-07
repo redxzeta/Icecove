@@ -180,18 +180,23 @@ Définissez des standards de documentation à l'échelle de l'équipe avec `poli
 
 ```toml
 [policy]
-enforce = "strict"    # strict | warn | off
+enforce = "strict"    # strict | warn
 
-[[policy.required_docs]]
-file = "PRD.md"
+[[policy.required]]
+name = "PRD.md"
 aliases = ["prd.md", "product-requirements.md"]
 
-[[policy.required_docs]]
-file = "ARCHITECTURE.md"
-sections = [
-  { heading = "## Overview" },
-  { heading = "## Components", min_items = 2 },
-]
+[[policy.required]]
+name = "ARCHITECTURE.md"
+
+  [[policy.required.sections]]
+  heading = "## Overview"
+  required = true
+
+  [[policy.required.sections]]
+  heading = "## Components"
+  required = true
+  min_items = 2
 ```
 
 Les fichiers de politique sont résolus avec priorité : **projet** > **équipe** > **défaut**. Cela garantit une qualité documentaire cohérente à travers tous vos projets tout en permettant des remplacements par projet.

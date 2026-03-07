@@ -24,13 +24,15 @@
   <a href="https://buymeacoffee.com/epicsaga"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-FFDD00?style=flat&logo=buy-me-a-coffee&logoColor=black" alt="Buy Me a Coffee" /></a>
 </p>
 
-Alcove is an MCP server that gives AI coding agents scoped, read-only access to your private project documentation — without leaking it into public repos.
+Alcove lets any AI coding agent read your private project docs — without leaking them into public repos.
+
+Keep PRDs, architecture decisions, secrets maps, and internal runbooks in one place. Every MCP-compatible agent gets the same access, across every project, with zero per-project config.
 
 ## The problem
 
-You're developing multiple projects simultaneously, switching between different AI coding agents. Each project has internal docs — PRDs, architecture decisions, deployment runbooks, secrets maps — that shouldn't live in your public GitHub repo.
+You have internal docs that shouldn't live in your public GitHub repo. But your AI agent can't help you properly if it can't read them — it invents requirements and ignores constraints you already documented.
 
-But your AI agent can't help you properly if it can't read them. It invents requirements. It ignores constraints you already documented. And every time you switch agents or projects, you lose context.
+Now multiply that across several projects and several agents. Each has different config. Every time you switch, you lose context. And there's no standard way to organize or validate any of it.
 
 ## How Alcove solves this
 
@@ -62,7 +64,7 @@ Alcove keeps all your private docs in **one shared repository**, organized by pr
 - **Scoped access** — each project only sees its own docs
 - **Private docs stay private** — sensitive docs (secrets map, internal decisions, tech debt) never touch your public repo
 - **Standardized doc structure** — `policy.toml` enforces consistent docs across all projects and teams
-- **Cross-repo audit** — finds internal docs accidentally pushed to GitHub, suggests fixes
+- **Cross-repo audit** — finds internal docs misplaced in your project repo, suggests fixes
 - **Document validation** — checks for missing files, unfilled templates, required sections
 - **Works with 8+ agents** — Claude Code, Cursor, Claude Desktop, Cline, OpenCode, Codex, Antigravity, Gemini CLI
 
@@ -73,7 +75,7 @@ Alcove keeps all your private docs in **one shared repository**, organized by pr
 | Internal docs scattered across Notion, Google Docs, local files | One doc-repo, structured by project |
 | Each AI agent configured separately for doc access | One setup, all agents share the same access |
 | Switching projects means losing doc context | CWD auto-detection, instant project switch |
-| Sensitive docs risk leaking into public repos | Private docs physically separated from project repos |
+| Sensitive docs sitting in project repos or scattered locally | Private docs physically separated from project repos |
 | Doc structure differs per project and team member | `policy.toml` enforces standards across all projects |
 | No way to check if docs are complete | `validate` catches missing files, empty templates, missing sections |
 
@@ -143,26 +145,27 @@ Your docs are organized in a separate directory (`DOCS_ROOT`), one folder per pr
 
 ## Document classification
 
-Alcove classifies docs into three tiers:
+Alcove classifies docs into tiers:
 
 | Classification | Where it lives | Examples |
 |---------------|----------------|----------|
 | **doc-repo-required** | Alcove (private) | PRD, Architecture, Decisions, Conventions |
 | **doc-repo-supplementary** | Alcove (private) | Deployment, Onboarding, Testing, Runbook |
+| **reference** | Alcove `reports/` folder | Audit reports, benchmarks, analysis |
 | **project-repo** | Your GitHub repo (public) | README, CHANGELOG, CONTRIBUTING |
 
-The `audit` tool checks both locations and suggests actions — like generating a public README from your private PRD, or pulling misplaced reports back into alcove.
+The `audit` tool scans both your doc-repo and local project directory, then suggests actions — like generating a public README from your private PRD, or pulling misplaced reports back into alcove.
 
 ## MCP Tools
 
 | Tool | What it does |
 |------|-------------|
 | `get_project_docs_overview` | List all docs with classification and sizes |
-| `search_project_docs` | Keyword search across all project docs |
-| `get_doc_file` | Read a specific doc by path |
+| `search_project_docs` | Keyword search across doc-repo and project repo |
+| `get_doc_file` | Read a specific doc by path (supports `offset`/`limit` for large files) |
 | `list_projects` | Show all projects in your docs repo |
-| `audit_project` | Cross-repo audit with suggested actions |
-| `init_project` | Scaffold docs for a new project from template |
+| `audit_project` | Cross-repo audit — scans doc-repo and local project repo, suggests actions |
+| `init_project` | Scaffold docs for a new project (internal + external docs, selective file creation) |
 | `validate_docs` | Validate docs against team policy (`policy.toml`) |
 
 ## CLI
@@ -174,27 +177,42 @@ alcove validate     Validate docs against policy (--format json, --exit-code)
 alcove uninstall    Remove skills, config, and legacy files
 ```
 
+## Project detection
+
+By default, Alcove detects the current project from your terminal's working directory (CWD). You can override this with the `MCP_PROJECT_NAME` environment variable:
+
+```bash
+MCP_PROJECT_NAME=my-api alcove
+```
+
+This is useful when your CWD doesn't match a project name in your docs repo.
+
 ## Document policy
 
 Define team-wide documentation standards with `policy.toml` in your docs repo:
 
 ```toml
 [policy]
-enforce = "strict"    # strict | warn | off
+enforce = "strict"    # strict | warn
 
-[[policy.required_docs]]
-file = "PRD.md"
+[[policy.required]]
+name = "PRD.md"
 aliases = ["prd.md", "product-requirements.md"]
 
-[[policy.required_docs]]
-file = "ARCHITECTURE.md"
-sections = [
-  { heading = "## Overview" },
-  { heading = "## Components", min_items = 2 },
-]
+[[policy.required]]
+name = "ARCHITECTURE.md"
+
+  [[policy.required.sections]]
+  heading = "## Overview"
+  required = true
+
+  [[policy.required.sections]]
+  heading = "## Components"
+  required = true
+  min_items = 2
 ```
 
-Policy files are resolved with priority: **project** > **team** > **default**. This ensures consistent doc quality across all your projects while allowing per-project overrides.
+Policy files are resolved with priority: **project** (`<project>/.alcove/policy.toml`) > **team** (`DOCS_ROOT/.alcove/policy.toml`) > **built-in default** (from your `config.toml` core files). This ensures consistent doc quality across all your projects while allowing per-project overrides.
 
 ## Configuration
 

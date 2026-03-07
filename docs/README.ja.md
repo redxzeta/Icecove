@@ -180,18 +180,23 @@ alcove uninstall    スキル、設定、レガシーファイルを削除
 
 ```toml
 [policy]
-enforce = "strict"    # strict | warn | off
+enforce = "strict"    # strict | warn
 
-[[policy.required_docs]]
-file = "PRD.md"
+[[policy.required]]
+name = "PRD.md"
 aliases = ["prd.md", "product-requirements.md"]
 
-[[policy.required_docs]]
-file = "ARCHITECTURE.md"
-sections = [
-  { heading = "## Overview" },
-  { heading = "## Components", min_items = 2 },
-]
+[[policy.required]]
+name = "ARCHITECTURE.md"
+
+  [[policy.required.sections]]
+  heading = "## Overview"
+  required = true
+
+  [[policy.required.sections]]
+  heading = "## Components"
+  required = true
+  min_items = 2
 ```
 
 ポリシーファイルは**プロジェクト** > **チーム** > **デフォルト**の優先順位で解決されます。これにより、プロジェクトごとのオーバーライドを許可しつつ、すべてのプロジェクトで一貫したドキュメント品質を確保します。
