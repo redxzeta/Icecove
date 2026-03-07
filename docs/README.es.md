@@ -24,9 +24,9 @@
   <a href="https://buymeacoffee.com/epicsaga"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-FFDD00?style=flat&logo=buy-me-a-coffee&logoColor=black" alt="Buy Me a Coffee" /></a>
 </p>
 
-Alcove permite que cualquier agente de codificacion con IA lea la documentacion privada de tu proyecto, sin exponerla en repositorios publicos.
+Alcove permite que cualquier agente de codificacion con IA lea y gestione la documentacion privada de tu proyecto, sin exponerla en repositorios publicos.
 
-Guarda PRDs, decisiones de arquitectura, mapas de secretos y runbooks internos en un solo lugar. Cada agente compatible con MCP obtiene el mismo acceso, en todos los proyectos, sin configuracion por proyecto.
+Guarda PRDs, decisiones de arquitectura, mapas de secretos y runbooks internos en un solo lugar. Cada agente compatible con MCP obtiene las mismas herramientas, en todos los proyectos, sin configuracion por proyecto.
 
 ## El problema
 
@@ -123,37 +123,20 @@ flowchart LR
     end
 
     subgraph Agents["Cualquier agente MCP"]
-        AG1(Claude Code)
-        AG2(Cursor)
-        AG3(Gemini CLI)
-        AG4(Codex)
-        AG5(Copilot)
+        AG["Claude Code · Cursor\nGemini CLI · Codex · Copilot\n+4 more"]
     end
 
     subgraph MCP["Servidor MCP Alcove"]
-        T1(overview)
-        T2("search (BM25 + grep)")
-        T3(get_file)
-        T4(audit)
-        T5(init)
-        T6(list)
-        T7(validate)
-        T8(rebuild_index)
-    end
-
-    subgraph Index["Indice de busqueda"]
-        IDX["tantivy BM25\n(auto-construido)"]
+        T["search · get_file\noverview · audit\ninit · validate"]
     end
 
     A1 -- "CWD detectado" --> D1
     A2 -- "CWD detectado" --> D2
     Agents -- "stdio MCP" --> MCP
-    MCP -- "solo lectura" --> Docs
-    MCP -- "busqueda con ranking" --> Index
-    Index -. "construido desde" .-> Docs
+    MCP -- "acceso con alcance" --> Docs
 ```
 
-Tus documentos estan organizados en un directorio separado (`DOCS_ROOT`), una carpeta por proyecto. Alcove lee desde ahi y lo sirve a cualquier agente de IA compatible con MCP a traves de stdio. Tu agente llama a herramientas como `get_doc_file("PRD.md")` y obtiene respuestas especificas del proyecto, independientemente del agente que estes usando.
+Tus documentos estan organizados en un directorio separado (`DOCS_ROOT`), una carpeta por proyecto. Alcove gestiona los documentos ahi y los sirve a cualquier agente de IA compatible con MCP a traves de stdio. Tu agente llama a herramientas como `get_doc_file("PRD.md")` y obtiene respuestas especificas del proyecto, independientemente del agente que estes usando.
 
 ## Clasificacion de documentos
 

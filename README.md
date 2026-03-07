@@ -24,9 +24,9 @@
   <a href="https://buymeacoffee.com/epicsaga"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-FFDD00?style=flat&logo=buy-me-a-coffee&logoColor=black" alt="Buy Me a Coffee" /></a>
 </p>
 
-Alcove lets any AI coding agent read your private project docs — without leaking them into public repos.
+Alcove lets any AI coding agent read and manage your private project docs — without leaking them into public repos.
 
-Keep PRDs, architecture decisions, secrets maps, and internal runbooks in one place. Every MCP-compatible agent gets the same access, across every project, with zero per-project config.
+Keep PRDs, architecture decisions, secrets maps, and internal runbooks in one place. Every MCP-compatible agent gets the same tools, across every project, with zero per-project config.
 
 ## The problem
 
@@ -123,37 +123,20 @@ flowchart LR
     end
 
     subgraph Agents["Any MCP agent"]
-        AG1(Claude Code)
-        AG2(Cursor)
-        AG3(Gemini CLI)
-        AG4(Codex)
-        AG5(Copilot)
+        AG["Claude Code · Cursor\nGemini CLI · Codex · Copilot\n+4 more"]
     end
 
     subgraph MCP["Alcove MCP server"]
-        T1(overview)
-        T2("search (BM25 + grep)")
-        T3(get_file)
-        T4(audit)
-        T5(init)
-        T6(list)
-        T7(validate)
-        T8(rebuild_index)
-    end
-
-    subgraph Index["Search index"]
-        IDX["tantivy BM25\n(auto-built)"]
+        T["search · get_file\noverview · audit\ninit · validate"]
     end
 
     A1 -- "CWD detected" --> D1
     A2 -- "CWD detected" --> D2
     Agents -- "stdio MCP" --> MCP
-    MCP -- "read-only" --> Docs
-    MCP -- "ranked search" --> Index
-    Index -. "built from" .-> Docs
+    MCP -- "scoped access" --> Docs
 ```
 
-Your docs are organized in a separate directory (`DOCS_ROOT`), one folder per project. Alcove reads from there and serves it to any MCP-compatible AI agent over stdio. Your agent calls tools like `get_doc_file("PRD.md")` and gets project-specific answers — regardless of which agent you're using.
+Your docs are organized in a separate directory (`DOCS_ROOT`), one folder per project. Alcove manages docs there and serves them to any MCP-compatible AI agent over stdio. Your agent calls tools like `get_doc_file("PRD.md")` and gets project-specific answers — regardless of which agent you're using.
 
 ## Document classification
 

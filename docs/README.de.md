@@ -24,9 +24,9 @@
   <a href="https://buymeacoffee.com/epicsaga"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-FFDD00?style=flat&logo=buy-me-a-coffee&logoColor=black" alt="Buy Me a Coffee" /></a>
 </p>
 
-Alcove ermöglicht jedem KI-Codierungs-Agenten, deine private Projektdokumentation zu lesen — ohne sie in öffentliche Repositories zu leaken.
+Alcove ermöglicht jedem KI-Codierungs-Agenten, deine private Projektdokumentation zu lesen und verwalten — ohne sie in öffentliche Repositories zu leaken.
 
-Speichere PRDs, Architekturentscheidungen, Secret-Maps und interne Runbooks an einem Ort. Jeder MCP-kompatible Agent erhält denselben Zugriff, über alle Projekte hinweg, ohne Konfiguration pro Projekt.
+Speichere PRDs, Architekturentscheidungen, Secret-Maps und interne Runbooks an einem Ort. Jeder MCP-kompatible Agent erhält dieselben Tools, über alle Projekte hinweg, ohne Konfiguration pro Projekt.
 
 ## Das Problem
 
@@ -59,7 +59,7 @@ Alcove speichert alle deine privaten Dokumente in **einem gemeinsamen Repository
 ## Hauptfunktionen
 
 - **Ein Docs-Repository, mehrere Projekte** — private Dokumente nach Projekt organisiert, an einem Ort verwaltet
-- **Einmal einrichten, jeder Agent** — einmal konfigurieren, jeder MCP-kompatible Agent erhält denselben Zugriff
+- **Einmal einrichten, jeder Agent** — einmal konfigurieren, jeder MCP-kompatible Agent erhält dieselben Tools
 - **Automatische Projekterkennung** vom CWD — keine Konfiguration pro Projekt nötig
 - **Bereichsbezogener Zugriff** — jedes Projekt sieht nur seine eigenen Dokumente
 - **Intelligente Suche** — BM25-Ranking-Suche mit automatischer Indexierung; findet die relevantesten Dokumente zuerst, fällt bei Bedarf auf grep zurück
@@ -75,7 +75,7 @@ Alcove speichert alle deine privaten Dokumente in **einem gemeinsamen Repository
 | Ohne Alcove | Mit Alcove |
 |-------------|------------|
 | Interne Dokumente verstreut über Notion, Google Docs, lokale Dateien | Ein Docs-Repository, nach Projekt strukturiert |
-| Jeder KI-Agent separat für Dokumentzugriff konfiguriert | Einmal einrichten, alle Agenten teilen denselben Zugriff |
+| Jeder KI-Agent separat für Dokumentzugriff konfiguriert | Einmal einrichten, alle Agenten teilen dieselben Tools |
 | Projektwechsel bedeutet Verlust des Dokumentkontexts | CWD-Autoerkennung, sofortiger Projektwechsel |
 | Agentensuche liefert zufällige Treffer | BM25-Ranking-Suche — beste Treffer zuerst, automatische Indexierung |
 | "Alle meine Notizen zur Authentifizierung durchsuchen" — unmöglich | Globale Suche über alle Projekte in einer Abfrage |
@@ -123,37 +123,20 @@ flowchart LR
     end
 
     subgraph Agents["Jeder MCP-Agent"]
-        AG1(Claude Code)
-        AG2(Cursor)
-        AG3(Gemini CLI)
-        AG4(Codex)
-        AG5(Copilot)
+        AG["Claude Code · Cursor\nGemini CLI · Codex · Copilot\n+4 more"]
     end
 
     subgraph MCP["Alcove MCP-Server"]
-        T1(overview)
-        T2("search (BM25 + grep)")
-        T3(get_file)
-        T4(audit)
-        T5(init)
-        T6(list)
-        T7(validate)
-        T8(rebuild_index)
-    end
-
-    subgraph Index["Suchindex"]
-        IDX["tantivy BM25\n(automatisch erstellt)"]
+        T["search · get_file\noverview · audit\ninit · validate"]
     end
 
     A1 -- "CWD erkannt" --> D1
     A2 -- "CWD erkannt" --> D2
     Agents -- "stdio MCP" --> MCP
-    MCP -- "schreibgeschützt" --> Docs
-    MCP -- "Ranking-Suche" --> Index
-    Index -. "erstellt aus" .-> Docs
+    MCP -- "bereichsbezogener Zugriff" --> Docs
 ```
 
-Deine Dokumente sind in einem separaten Verzeichnis (`DOCS_ROOT`) organisiert, ein Ordner pro Projekt. Alcove liest von dort und stellt sie jedem MCP-kompatiblen KI-Agenten über stdio bereit. Dein Agent ruft Tools wie `get_doc_file("PRD.md")` auf und erhält projektspezifische Antworten — unabhängig davon, welchen Agenten du verwendest.
+Deine Dokumente sind in einem separaten Verzeichnis (`DOCS_ROOT`) organisiert, ein Ordner pro Projekt. Alcove verwaltet Dokumente dort und stellt sie jedem MCP-kompatiblen KI-Agenten über stdio bereit. Dein Agent ruft Tools wie `get_doc_file("PRD.md")` auf und erhält projektspezifische Antworten — unabhängig davon, welchen Agenten du verwendest.
 
 ## Dokumentklassifizierung
 

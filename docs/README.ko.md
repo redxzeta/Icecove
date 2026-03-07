@@ -24,9 +24,9 @@
   <a href="https://buymeacoffee.com/epicsaga"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-FFDD00?style=flat&logo=buy-me-a-coffee&logoColor=black" alt="Buy Me a Coffee" /></a>
 </p>
 
-Alcove는 모든 AI 코딩 에이전트가 프라이빗 프로젝트 문서를 읽을 수 있게 해줍니다 — 공개 저장소에 유출되지 않으면서.
+Alcove는 모든 AI 코딩 에이전트가 프라이빗 프로젝트 문서를 읽고 관리할 수 있게 해줍니다 — 공개 저장소에 유출되지 않으면서.
 
-PRD, 아키텍처 결정, 시크릿 맵, 내부 런북을 한 곳에 보관하세요. 모든 MCP 호환 에이전트가 동일한 접근 권한을 얻고, 모든 프로젝트에서 동작하며, 프로젝트별 설정이 필요 없습니다.
+PRD, 아키텍처 결정, 시크릿 맵, 내부 런북을 한 곳에 보관하세요. 모든 MCP 호환 에이전트가 같은 도구를 얻고, 모든 프로젝트에서 동작하며, 프로젝트별 설정이 필요 없습니다.
 
 ## 문제
 
@@ -123,37 +123,20 @@ flowchart LR
     end
 
     subgraph Agents["모든 MCP 에이전트"]
-        AG1(Claude Code)
-        AG2(Cursor)
-        AG3(Gemini CLI)
-        AG4(Codex)
-        AG5(Copilot)
+        AG["Claude Code · Cursor\nGemini CLI · Codex · Copilot\n+4 more"]
     end
 
     subgraph MCP["Alcove MCP 서버"]
-        T1(overview)
-        T2("search (BM25 + grep)")
-        T3(get_file)
-        T4(audit)
-        T5(init)
-        T6(list)
-        T7(validate)
-        T8(rebuild_index)
-    end
-
-    subgraph Index["검색 인덱스"]
-        IDX["tantivy BM25\n(자동 빌드)"]
+        T["search · get_file\noverview · audit\ninit · validate"]
     end
 
     A1 -- "CWD 감지" --> D1
     A2 -- "CWD 감지" --> D2
     Agents -- "stdio MCP" --> MCP
-    MCP -- "읽기 전용" --> Docs
-    MCP -- "랭킹 검색" --> Index
-    Index -. "빌드 소스" .-> Docs
+    MCP -- "범위 지정 접근" --> Docs
 ```
 
-문서는 별도 디렉토리(`DOCS_ROOT`)에 프로젝트별 폴더로 정리됩니다. Alcove는 거기서 읽어 stdio를 통해 MCP 호환 AI 에이전트에게 제공합니다. 에이전트는 `get_doc_file("PRD.md")` 같은 도구를 호출하여 어떤 에이전트를 사용하든 프로젝트별 답변을 얻습니다.
+문서는 별도 디렉토리(`DOCS_ROOT`)에 프로젝트별 폴더로 정리됩니다. Alcove는 거기서 관리하고 제공합니다 — stdio를 통해 MCP 호환 AI 에이전트에게. 에이전트는 `get_doc_file("PRD.md")` 같은 도구를 호출하여 어떤 에이전트를 사용하든 프로젝트별 답변을 얻습니다.
 
 ## 문서 분류
 

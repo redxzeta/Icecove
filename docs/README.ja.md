@@ -24,9 +24,9 @@
   <a href="https://buymeacoffee.com/epicsaga"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-FFDD00?style=flat&logo=buy-me-a-coffee&logoColor=black" alt="Buy Me a Coffee" /></a>
 </p>
 
-Alcoveは、あらゆるAIコーディングエージェントにプライベートなプロジェクトドキュメントへの読み取り専用アクセスを提供します — パブリックリポジトリへの漏洩を防ぎながら。
+Alcoveは、あらゆるAIコーディングエージェントにプライベートなプロジェクトドキュメントの読み取り・管理するアクセスを提供します — パブリックリポジトリへの漏洩を防ぎながら。
 
-PRD、アーキテクチャ決定、シークレットマップ、内部ランブックを一箇所に保管。すべてのMCP互換エージェントが同じアクセスを取得し、すべてのプロジェクトで動作し、プロジェクトごとの設定は不要です。
+PRD、アーキテクチャ決定、シークレットマップ、内部ランブックを一箇所に保管。すべてのMCP互換エージェントが同じツールを取得し、すべてのプロジェクトで動作し、プロジェクトごとの設定は不要です。
 
 ## 課題
 
@@ -123,37 +123,20 @@ flowchart LR
     end
 
     subgraph Agents["任意のMCPエージェント"]
-        AG1(Claude Code)
-        AG2(Cursor)
-        AG3(Gemini CLI)
-        AG4(Codex)
-        AG5(Copilot)
+        AG["Claude Code · Cursor\nGemini CLI · Codex · Copilot\n+4 more"]
     end
 
     subgraph MCP["Alcove MCPサーバー"]
-        T1(overview)
-        T2("search (BM25 + grep)")
-        T3(get_file)
-        T4(audit)
-        T5(init)
-        T6(list)
-        T7(validate)
-        T8(rebuild_index)
-    end
-
-    subgraph Index["検索インデックス"]
-        IDX["tantivy BM25\n(自動ビルド)"]
+        T["search · get_file\noverview · audit\ninit · validate"]
     end
 
     A1 -- "CWD検出" --> D1
     A2 -- "CWD検出" --> D2
     Agents -- "stdio MCP" --> MCP
-    MCP -- "読み取り専用" --> Docs
-    MCP -- "ランキング検索" --> Index
-    Index -. "ビルドソース" .-> Docs
+    MCP -- "スコープ付きアクセス" --> Docs
 ```
 
-ドキュメントは別ディレクトリ（`DOCS_ROOT`）にプロジェクトごとのフォルダで整理されています。Alcoveはそこからドキュメントを読み取り、stdioを通じて任意のMCP互換AIエージェントに提供します。エージェントが`get_doc_file("PRD.md")`のようなツールを呼び出すと、使用しているエージェントに関係なく、プロジェクト固有の回答が得られます。
+ドキュメントは別ディレクトリ（`DOCS_ROOT`）にプロジェクトごとのフォルダで整理されています。Alcoveはそこからドキュメントを管理し、提供します — stdioを通じて任意のMCP互換AIエージェントに。エージェントが`get_doc_file("PRD.md")`のようなツールを呼び出すと、使用しているエージェントに関係なく、プロジェクト固有の回答が得られます。
 
 ## ドキュメント分類
 

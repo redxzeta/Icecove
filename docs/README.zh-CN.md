@@ -24,7 +24,7 @@
   <a href="https://buymeacoffee.com/epicsaga"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-FFDD00?style=flat&logo=buy-me-a-coffee&logoColor=black" alt="Buy Me a Coffee" /></a>
 </p>
 
-Alcove 让任何 AI 编码代理都能读取您的私有项目文档——不会将它们泄露到公共仓库中。
+Alcove 让任何 AI 编码代理都能读取和管理您的私有项目文档——不会将它们泄露到公共仓库中。
 
 将 PRD、架构决策、密钥映射和内部运维手册集中保管。每个 MCP 兼容的代理都获得相同的访问权限，跨所有项目，无需每个项目单独配置。
 
@@ -50,7 +50,7 @@ Alcove 将所有私有文档保存在**一个共享仓库**中，按项目组织
 ~/projects/my-api $ codex "审查 API 设计"
 
   → Alcove 检测项目：my-api
-  → 相同的文档结构，相同的访问模式
+  → 相同的文档结构，相同的工具模式
   → 不同的项目，相同的工作流
 ```
 
@@ -123,37 +123,20 @@ flowchart LR
     end
 
     subgraph Agents["任意 MCP 代理"]
-        AG1(Claude Code)
-        AG2(Cursor)
-        AG3(Gemini CLI)
-        AG4(Codex)
-        AG5(Copilot)
+        AG["Claude Code · Cursor\nGemini CLI · Codex · Copilot\n+4 more"]
     end
 
     subgraph MCP["Alcove MCP 服务器"]
-        T1(overview)
-        T2("search (BM25 + grep)")
-        T3(get_file)
-        T4(audit)
-        T5(init)
-        T6(list)
-        T7(validate)
-        T8(rebuild_index)
-    end
-
-    subgraph Index["搜索索引"]
-        IDX["tantivy BM25\n(自动构建)"]
+        T["search · get_file\noverview · audit\ninit · validate"]
     end
 
     A1 -- "CWD 检测" --> D1
     A2 -- "CWD 检测" --> D2
     Agents -- "stdio MCP" --> MCP
-    MCP -- "只读" --> Docs
-    MCP -- "排名搜索" --> Index
-    Index -. "构建自" .-> Docs
+    MCP -- "范围访问" --> Docs
 ```
 
-文档组织在单独的目录（`DOCS_ROOT`）中，每个项目一个文件夹。Alcove 从那里读取并通过 stdio 提供给任何兼容 MCP 的 AI 代理。代理调用 `get_doc_file("PRD.md")` 等工具来获取项目特定的回答——无论您使用的是哪个代理。
+文档组织在单独的目录（`DOCS_ROOT`）中，每个项目一个文件夹。Alcove 管理文档并通过 stdio 提供给任何兼容 MCP 的 AI 代理。代理调用 `get_doc_file("PRD.md")` 等工具来获取项目特定的回答——无论您使用的是哪个代理。
 
 ## 文档分类
 
