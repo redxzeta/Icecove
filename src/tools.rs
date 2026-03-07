@@ -1454,4 +1454,227 @@ mod tests {
         let actions = result["suggested_actions"].as_array().unwrap();
         assert!(actions.iter().any(|a| a["action"] == "none"));
     }
+
+    // =====================================================================
+    // Edge-case & coverage tests
+    // =====================================================================
+
+    // -- tool_search: offset/limit in arguments --
+
+    #[test]
+    fn search_with_offset_limit_args() {
+        let tmp = setup_docs_root();
+        let project_root = tmp.path().join("testproj");
+        // "#" appears in headings of multiple files; limit to 2
+        let args = json!({"query": "#", "limit": 2});
+        let result = tool_search(&project_root, args, None).unwrap();
+        let matches = result["matches"].as_array().unwrap();
+        assert_eq!(matches.len(), 2);
+        assert_eq!(result["truncated"], true);
+    }
+
+    // -- tool_search: empty query string --
+
+    #[test]
+    fn search_with_empty_query() {
+        let tmp = setup_docs_root();
+        let project_root = tmp.path().join("testproj");
+        let args = json!({"query": ""});
+        let result = tool_search(&project_root, args, None).unwrap();
+        // Empty query matches every line
+        let matches = result["matches"].as_array().unwrap();
+        assert!(!matches.is_empty(), "empty query should match all non-empty lines");
+    }
+
+    // -- tool_get_file: read a .txt file --
+
+    #[test]
+    fn get_file_reads_txt() {
+        let tmp = setup_docs_root();
+        let project_root = tmp.path().join("testproj");
+        fs::write(project_root.join("notes.txt"), "Plain text notes here.").unwrap();
+
+        let args = json!({"relative_path": "notes.txt"});
+        let result = tool_get_file(&project_root, args).unwrap();
+        assert_eq!(result["path"], "notes.txt");
+        assert!(result["content"].as_str().unwrap().contains("Plain text notes"));
+    }
+
+    // -- tool_get_file: read a file in a nested subdirectory (3 levels deep) --
+
+    #[test]
+    fn get_file_reads_deeply_nested() {
+        let tmp = setup_docs_root();
+        let project_root = tmp.path().join("testproj");
+        let deep_dir = project_root.join("level1/level2/level3");
+        fs::create_dir_all(&deep_dir).unwrap();
+        fs::write(deep_dir.join("deep.md"), "# Deep File\n\nContent at depth 3.").unwrap();
+
+        let args = json!({"relative_path": "level1/level2/level3/deep.md"});
+        let result = tool_get_file(&project_root, args).unwrap();
+        assert_eq!(result["path"], "level1/level2/level3/deep.md");
+        assert!(result["content"].as_str().unwrap().contains("Deep File"));
+    }
+
+    // -- tool_init_project: invalid name with path separators --
+
+    #[test]
+    fn init_project_rejects_path_separator_names() {
+        let tmp = setup_docs_root();
+
+        let slash = tool_init_project(tmp.path(), json!({"project_name": "foo/bar"}));
+        assert!(slash.is_err());
+        let err_msg = slash.unwrap_err().to_string();
+        assert!(err_msg.contains("Invalid project name"), "got: {err_msg}");
+
+        let backslash = tool_init_project(tmp.path(), json!({"project_name": "foo\\bar"}));
+        assert!(backslash.is_err());
+        let err_msg = backslash.unwrap_err().to_string();
+        assert!(err_msg.contains("Invalid project name"), "got: {err_msg}");
+
+        let dotdot = tool_init_project(tmp.path(), json!({"project_name": "foo..bar"}));
+        assert!(dotdot.is_err());
+    }
+
+    // -- tool_init_project: project_path creates README and CHANGELOG --
+
+    #[test]
+    fn init_project_creates_repo_readme_and_changelog() {
+        let tmp = setup_docs_root();
+        let repo = TempDir::new().unwrap();
+        let args = json!({
+            "project_name": "repodocs",
+            "project_path": repo.path().to_string_lossy()
+        });
+        let result = tool_init_project(tmp.path(), args).unwrap();
+
+        let repo_created: Vec<&str> = result["external_docs"]["created"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|v| v.as_str())
+            .collect();
+        assert!(repo_created.contains(&"README.md"), "README.md should be created");
+        assert!(repo_created.contains(&"CHANGELOG.md"), "CHANGELOG.md should be created");
+
+        // Verify content on disk contains project name substitution
+        let readme = fs::read_to_string(repo.path().join("README.md")).unwrap();
+        assert!(readme.contains("repodocs"), "README should contain project name");
+
+        let changelog = fs::read_to_string(repo.path().join("CHANGELOG.md")).unwrap();
+        assert!(changelog.contains("repodocs"), "CHANGELOG should contain project name");
+    }
+
+    // -- tool_overview: empty project directory --
+
+    #[test]
+    fn overview_empty_project_dir() {
+        let tmp = TempDir::new().unwrap();
+        let empty_project = tmp.path().join("emptyproj");
+        fs::create_dir_all(&empty_project).unwrap();
+
+        let result = tool_overview(&empty_project, "emptyproj", "test", None).unwrap();
+        assert_eq!(result["project_name"], "emptyproj");
+        assert_eq!(result["total_files"].as_u64().unwrap(), 0);
+        assert_eq!(result["doc_repo"]["count"].as_u64().unwrap(), 0);
+    }
+
+    // -- tool_overview: mixed file types (.md, .txt, non-doc files) --
+
+    #[test]
+    fn overview_mixed_file_types() {
+        let tmp = TempDir::new().unwrap();
+        let project = tmp.path().join("mixedproj");
+        fs::create_dir_all(&project).unwrap();
+
+        fs::write(project.join("README.md"), "# Readme").unwrap();
+        fs::write(project.join("notes.txt"), "some notes").unwrap();
+        fs::write(project.join("main.rs"), "fn main() {}").unwrap();
+        fs::write(project.join("style.css"), "body {}").unwrap();
+        fs::write(project.join("data.json"), "{}").unwrap(); // json not matching openapi/swagger
+
+        let result = tool_overview(&project, "mixedproj", "test", None).unwrap();
+        let files = result["doc_repo"]["files"].as_array().unwrap();
+        let file_paths: Vec<&str> = files.iter().filter_map(|f| f["path"].as_str()).collect();
+
+        // .md and .txt are doc files
+        assert!(file_paths.contains(&"README.md"), "should include .md");
+        assert!(file_paths.contains(&"notes.txt"), "should include .txt");
+        // .rs, .css, plain .json are not doc files
+        assert!(!file_paths.contains(&"main.rs"), "should exclude .rs");
+        assert!(!file_paths.contains(&"style.css"), "should exclude .css");
+        assert!(!file_paths.contains(&"data.json"), "should exclude non-openapi .json");
+        // Total should be 2
+        assert_eq!(result["doc_repo"]["count"].as_u64().unwrap(), 2);
+    }
+
+    // -- tool_audit: repo_path with docs/ subdirectory --
+
+    #[test]
+    fn audit_with_repo_docs_subdirectory() {
+        let tmp = setup_docs_root();
+        let project_root = tmp.path().join("testproj");
+
+        let repo = TempDir::new().unwrap();
+        fs::write(repo.path().join("README.md"), "# Project Readme").unwrap();
+        let docs_dir = repo.path().join("docs");
+        fs::create_dir_all(&docs_dir).unwrap();
+        fs::write(docs_dir.join("guide.md"), "# User Guide\n\nDetailed usage instructions.").unwrap();
+        fs::write(docs_dir.join("api.md"), "# API Reference\n\nEndpoint documentation.").unwrap();
+
+        let result = tool_audit(&project_root, "testproj", Some(repo.path())).unwrap();
+        let repo_docs = result["project_repo"]["docs"].as_array().unwrap();
+
+        // Should find README.md (root) + guide.md + api.md (docs/)
+        assert!(
+            repo_docs.len() >= 3,
+            "expected at least 3 repo docs, got {}",
+            repo_docs.len()
+        );
+
+        let paths: Vec<&str> = repo_docs.iter().filter_map(|d| d["path"].as_str()).collect();
+        assert!(paths.contains(&"README.md"));
+        assert!(paths.iter().any(|p| p.contains("guide.md")));
+        assert!(paths.iter().any(|p| p.contains("api.md")));
+    }
+
+    // -- tool_list_projects: empty docs_root --
+
+    #[test]
+    fn list_projects_empty_docs_root() {
+        let tmp = TempDir::new().unwrap();
+        // No project directories, just an empty root
+        let result = tool_list_projects(tmp.path()).unwrap();
+        let projects = result["projects"].as_array().unwrap();
+        assert!(projects.is_empty(), "empty docs root should yield no projects");
+    }
+
+    // -- resolve_project: MCP_PROJECT_NAME env var --
+
+    #[test]
+    fn resolve_project_with_env_var() {
+        let tmp = TempDir::new().unwrap();
+        let project_dir = tmp.path().join("envproj");
+        fs::create_dir_all(&project_dir).unwrap();
+
+        // SAFETY: This test is single-threaded and we restore the env var immediately.
+        unsafe { env::set_var("MCP_PROJECT_NAME", "envproj"); }
+        let resolved = resolve_project(tmp.path());
+        // Clean up env var immediately to avoid test pollution
+        unsafe { env::remove_var("MCP_PROJECT_NAME"); }
+
+        let resolved = resolved.expect("should resolve project from env var");
+        assert_eq!(resolved.name, "envproj");
+        assert_eq!(resolved.detected_via, "env");
+    }
+
+    // -- detect_repo_path: repo detection logic --
+
+    #[test]
+    fn detect_repo_path_returns_none_for_unrelated_name() {
+        // detect_repo_path walks up CWD looking for a directory component
+        // matching the project name. A random name should not match.
+        let result = detect_repo_path("__nonexistent_project_name_xyz__");
+        assert!(result.is_none(), "should return None for unrelated project name");
+    }
 }

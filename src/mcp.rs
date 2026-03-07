@@ -453,4 +453,164 @@ mod tests {
         assert!(!serialized.contains("\"id\""));
         assert!(serialized.contains("\"error\""));
     }
+
+    // -----------------------------------------------------------------------
+    // Additional edge-case tests
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn dispatch_initialized_without_notifications_prefix() {
+        // "initialized" (without "notifications/" prefix) should also return None
+        let resp = dispatch(make_req("initialized", json!({})));
+        assert!(resp.is_none(), "bare 'initialized' should not produce a response");
+    }
+
+    #[test]
+    fn dispatch_tool_call_unknown_tool_with_docs_root() {
+        // Unknown tools (other than list_projects / init_project) require
+        // project resolution first. With an empty DOCS_ROOT, resolution fails
+        // with -32001 before reaching the unknown-tool branch.
+        let tmp = tempfile::tempdir().unwrap();
+        // SAFETY: test is single-threaded; no other thread reads DOCS_ROOT concurrently.
+        unsafe { std::env::set_var("DOCS_ROOT", tmp.path().as_os_str()) };
+
+        let req = make_req(
+            "tools/call",
+            json!({"name": "totally_nonexistent_tool", "arguments": {}}),
+        );
+        let resp = dispatch(req).unwrap();
+
+        // SAFETY: test is single-threaded; restoring env to previous state.
+        unsafe { std::env::remove_var("DOCS_ROOT") };
+
+        assert!(resp.error.is_some(), "unknown tool should produce an error");
+        let err = resp.error.unwrap();
+        // Project resolution fails before the unknown tool check
+        assert_eq!(err.code, -32001);
+        assert!(
+            err.message.contains("Could not detect project"),
+            "should get project resolution error, got: {}",
+            err.message,
+        );
+    }
+
+    #[test]
+    fn handle_tools_list_contains_validate_docs() {
+        let resp = handle_tools_list(Some(json!(1)));
+        let result = resp.result.unwrap();
+        let tools = result["tools"].as_array().unwrap();
+
+        let validate = tools.iter().find(|t| t["name"] == "validate_docs");
+        assert!(validate.is_some(), "validate_docs tool must be present");
+
+        let validate = validate.unwrap();
+        let schema = &validate["inputSchema"];
+        assert_eq!(schema["type"], "object");
+        assert!(schema["properties"].is_object(), "validate_docs schema should have properties object");
+        assert!(schema["required"].is_array(), "validate_docs schema should have required array");
+    }
+
+    #[test]
+    fn mcp_text_result_with_empty_string() {
+        let val = json!("");
+        let result = mcp_text_result(&val);
+        let content = result["content"].as_array().unwrap();
+        assert_eq!(content.len(), 1);
+        assert_eq!(content[0]["type"], "text");
+        // Pretty-printed empty string is just `""`
+        let text = content[0]["text"].as_str().unwrap();
+        assert_eq!(text, "\"\"");
+    }
+
+    #[test]
+    fn mcp_text_result_with_null() {
+        let val = json!(null);
+        let result = mcp_text_result(&val);
+        let text = result["content"][0]["text"].as_str().unwrap();
+        assert_eq!(text, "null");
+    }
+
+    #[test]
+    fn mcp_text_result_with_array() {
+        let val = json!(["alpha", "beta", "gamma"]);
+        let result = mcp_text_result(&val);
+        let text = result["content"][0]["text"].as_str().unwrap();
+        assert!(text.contains("alpha"));
+        assert!(text.contains("beta"));
+        assert!(text.contains("gamma"));
+        // Verify it round-trips back to the same array
+        let parsed: Value = serde_json::from_str(text).unwrap();
+        assert!(parsed.is_array());
+        assert_eq!(parsed.as_array().unwrap().len(), 3);
+    }
+
+    #[test]
+    fn rpc_request_deserialization_missing_optional_fields() {
+        // id and params are optional / have defaults
+        let json_str = r#"{"jsonrpc": "2.0", "method": "initialize"}"#;
+        let req: RpcRequest = serde_json::from_str(json_str).unwrap();
+        assert_eq!(req.method, "initialize");
+        assert!(req.id.is_none(), "id should be None when absent");
+        assert!(req.params.is_null(), "params should default to null when absent");
+    }
+
+    #[test]
+    fn rpc_request_deserialization_with_all_fields() {
+        let json_str = r#"{"jsonrpc": "2.0", "id": 42, "method": "tools/list", "params": {"foo": "bar"}}"#;
+        let req: RpcRequest = serde_json::from_str(json_str).unwrap();
+        assert_eq!(req.id, Some(json!(42)));
+        assert_eq!(req.method, "tools/list");
+        assert_eq!(req.params["foo"], "bar");
+    }
+
+    #[test]
+    fn rpc_response_ok_with_none_id_skips_id_in_json() {
+        let resp = RpcResponse::ok(None, json!("hello"));
+        let serialized = serde_json::to_string(&resp).unwrap();
+        assert!(!serialized.contains("\"id\""), "id should be skipped when None");
+        assert!(serialized.contains("\"result\""));
+    }
+
+    #[test]
+    fn tool_description_serialization_renames_input_schema() {
+        let td = ToolDescription {
+            name: "test_tool".into(),
+            description: "A test tool".into(),
+            input_schema: json!({"type": "object", "properties": {}}),
+        };
+        let serialized = serde_json::to_value(&td).unwrap();
+        // The field must appear as "inputSchema", not "input_schema"
+        assert!(
+            serialized.get("inputSchema").is_some(),
+            "field should be serialized as inputSchema"
+        );
+        assert!(
+            serialized.get("input_schema").is_none(),
+            "field should NOT appear as input_schema"
+        );
+        assert_eq!(serialized["inputSchema"]["type"], "object");
+    }
+
+    #[test]
+    fn dispatch_list_projects_with_valid_docs_root() {
+        let tmp = tempfile::tempdir().unwrap();
+        // Create a fake project directory inside the temp DOCS_ROOT
+        std::fs::create_dir(tmp.path().join("my_project")).unwrap();
+        // SAFETY: test is single-threaded; no other thread reads DOCS_ROOT concurrently.
+        unsafe { std::env::set_var("DOCS_ROOT", tmp.path().as_os_str()) };
+
+        let req = make_req("tools/call", json!({"name": "list_projects", "arguments": {}}));
+        let resp = dispatch(req).unwrap();
+
+        // SAFETY: test is single-threaded; restoring env to previous state.
+        unsafe { std::env::remove_var("DOCS_ROOT") };
+
+        assert!(resp.error.is_none(), "list_projects should succeed: {:?}", resp.error);
+        let result = resp.result.unwrap();
+        let text = result["content"][0]["text"].as_str().unwrap();
+        assert!(
+            text.contains("my_project"),
+            "list_projects output should contain the created project directory"
+        );
+    }
 }

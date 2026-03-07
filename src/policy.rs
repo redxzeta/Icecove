@@ -738,4 +738,294 @@ mod tests {
         let content = "## A\n\n* x\n* y\n";
         assert_eq!(count_list_items_after_heading(content, "## A"), 2);
     }
+
+    // -- Edge case: load_policy with malformed TOML --
+
+    #[test]
+    fn load_policy_malformed_toml_returns_default() {
+        let tmp = TempDir::new().unwrap();
+        let project = "testproj";
+        let project_dir = tmp.path().join(project);
+        fs::create_dir_all(&project_dir).unwrap();
+
+        // Write malformed TOML at team level
+        let policy_dir = tmp.path().join(".alcove");
+        fs::create_dir_all(&policy_dir).unwrap();
+        fs::write(policy_dir.join("policy.toml"), "{{{{ not valid toml !@#$").unwrap();
+
+        let policy = load_policy(tmp.path(), project);
+        // Should fall through to built-in default
+        assert_eq!(policy.policy.enforce, "warn");
+        assert!(!policy.policy.required.is_empty());
+    }
+
+    // -- Edge case: load_policy with empty file --
+
+    #[test]
+    fn load_policy_empty_file_returns_default() {
+        let tmp = TempDir::new().unwrap();
+        let project = "testproj";
+        let project_dir = tmp.path().join(project);
+        fs::create_dir_all(&project_dir).unwrap();
+
+        let policy_dir = tmp.path().join(".alcove");
+        fs::create_dir_all(&policy_dir).unwrap();
+        fs::write(policy_dir.join("policy.toml"), "").unwrap();
+
+        let policy = load_policy(tmp.path(), project);
+        // Empty TOML cannot deserialize to PolicyFile (missing [policy] table) → default
+        assert_eq!(policy.policy.enforce, "warn");
+        assert!(!policy.policy.required.is_empty());
+    }
+
+    // -- count_list_items_after_heading: no list items (just text) --
+
+    #[test]
+    fn count_items_no_list_items_just_text() {
+        let content = "## Section\n\nJust some paragraph text.\nAnother line of text.\n\n## Next\n";
+        assert_eq!(count_list_items_after_heading(content, "## Section"), 0);
+    }
+
+    // -- count_list_items_after_heading: heading not found --
+
+    #[test]
+    fn count_items_heading_not_found() {
+        let content = "## Existing\n\n- item\n";
+        assert_eq!(count_list_items_after_heading(content, "## NonExistent"), 0);
+    }
+
+    // -- count_list_items_after_heading: mixed - and * list items --
+
+    #[test]
+    fn count_items_mixed_dash_and_asterisk() {
+        let content = "## Mixed\n\n- dash item\n* star item\n- another dash\n* another star\n\n## End\n";
+        assert_eq!(count_list_items_after_heading(content, "## Mixed"), 4);
+    }
+
+    // -- count_list_items_after_heading: numbered list items should NOT count --
+
+    #[test]
+    fn count_items_numbered_list_not_counted() {
+        let content = "## Numbered\n\n1. first\n2. second\n3. third\n- actual item\n\n## End\n";
+        // Only the `- actual item` should count (numbered items are not - or *)
+        assert_eq!(count_list_items_after_heading(content, "## Numbered"), 1);
+    }
+
+    // -- validate: file with all sections passing --
+
+    #[test]
+    fn validate_all_sections_passing() {
+        let (tmp, project) = setup_with_policy(r###"
+            [policy]
+            enforce = "strict"
+            [[policy.required]]
+            name = "PRD.md"
+              [[policy.required.sections]]
+              heading = "## Overview"
+              required = true
+              min_items = 2
+              [[policy.required.sections]]
+              heading = "## Goals"
+              required = true
+              min_items = 1
+        "###);
+        let content = "\
+# PRD
+
+## Overview
+
+- Point one
+- Point two
+- Point three
+
+## Goals
+
+- Goal one
+
+Extra content to ensure we are over 100 bytes threshold for minimal content check easily.";
+        fs::write(tmp.path().join(&project).join("PRD.md"), content).unwrap();
+
+        let (_, results) = validate(tmp.path(), &project, None).unwrap();
+        assert_eq!(results[0].status, FileStatus::Pass);
+        assert_eq!(results[0].sections.len(), 2);
+        assert!(results[0].sections.iter().all(|s| s.status == FileStatus::Pass));
+    }
+
+    // -- validate: enforce = "strict" vs "relaxed" appears in JSON output --
+
+    #[test]
+    fn validate_enforce_strict_in_json_output() {
+        let (tmp, project) = setup_with_policy(r###"
+            [policy]
+            enforce = "strict"
+            [[policy.required]]
+            name = "PRD.md"
+        "###);
+        let content = format!("# PRD\n\n{}", "x".repeat(200));
+        fs::write(tmp.path().join(&project).join("PRD.md"), content).unwrap();
+
+        let (policy, results) = validate(tmp.path(), &project, None).unwrap();
+        let source = policy_source(tmp.path(), &project);
+        let json = validation_to_json(&policy, &results, source);
+        assert_eq!(json["enforce"], "strict");
+    }
+
+    #[test]
+    fn validate_enforce_relaxed_in_json_output() {
+        let (tmp, project) = setup_with_policy(r###"
+            [policy]
+            enforce = "relaxed"
+            [[policy.required]]
+            name = "PRD.md"
+        "###);
+        let content = format!("# PRD\n\n{}", "x".repeat(200));
+        fs::write(tmp.path().join(&project).join("PRD.md"), content).unwrap();
+
+        let (policy, results) = validate(tmp.path(), &project, None).unwrap();
+        let source = policy_source(tmp.path(), &project);
+        let json = validation_to_json(&policy, &results, source);
+        assert_eq!(json["enforce"], "relaxed");
+    }
+
+    // -- policy_source: test all 3 sources --
+
+    #[test]
+    fn policy_source_returns_project() {
+        let tmp = TempDir::new().unwrap();
+        let project = "testproj";
+        let proj_policy_dir = tmp.path().join(project).join(".alcove");
+        fs::create_dir_all(&proj_policy_dir).unwrap();
+        fs::write(proj_policy_dir.join("policy.toml"), "[policy]").unwrap();
+
+        assert_eq!(policy_source(tmp.path(), project), "project");
+    }
+
+    #[test]
+    fn policy_source_returns_team() {
+        let tmp = TempDir::new().unwrap();
+        let project = "testproj";
+        fs::create_dir_all(tmp.path().join(project)).unwrap();
+        let team_dir = tmp.path().join(".alcove");
+        fs::create_dir_all(&team_dir).unwrap();
+        fs::write(team_dir.join("policy.toml"), "[policy]").unwrap();
+
+        assert_eq!(policy_source(tmp.path(), project), "team");
+    }
+
+    #[test]
+    fn policy_source_returns_default() {
+        let tmp = TempDir::new().unwrap();
+        assert_eq!(policy_source(tmp.path(), "noproj"), "default");
+    }
+
+    // -- validation_to_json: verify JSON structure has all expected fields --
+
+    #[test]
+    fn validation_to_json_has_all_fields() {
+        let policy = PolicyFile {
+            policy: Policy {
+                enforce: "warn".into(),
+                version: "1".into(),
+                required: vec![],
+                naming: None,
+            },
+        };
+        let results = vec![
+            ValidationResult {
+                file: "A.md".into(),
+                status: FileStatus::Pass,
+                sections: vec![SectionResult {
+                    heading: "## Intro".into(),
+                    status: FileStatus::Pass,
+                    detail: None,
+                }],
+                reason: None,
+            },
+            ValidationResult {
+                file: "B.md".into(),
+                status: FileStatus::Warn,
+                sections: vec![],
+                reason: Some("minimal_content".into()),
+            },
+            ValidationResult {
+                file: "C.md".into(),
+                status: FileStatus::Fail,
+                sections: vec![],
+                reason: Some("file_not_found".into()),
+            },
+        ];
+        let json = validation_to_json(&policy, &results, "default");
+
+        // Top-level fields
+        assert!(json.get("status").is_some());
+        assert!(json.get("enforce").is_some());
+        assert!(json.get("policy_source").is_some());
+        assert!(json.get("results").is_some());
+        assert!(json.get("summary").is_some());
+
+        // Summary sub-fields
+        let summary = &json["summary"];
+        assert_eq!(summary["total"], 3);
+        assert_eq!(summary["pass"], 1);
+        assert_eq!(summary["warn"], 1);
+        assert_eq!(summary["fail"], 1);
+
+        // Overall status should be "fail" (worst of pass/warn/fail)
+        assert_eq!(json["status"], "fail");
+        assert_eq!(json["policy_source"], "default");
+
+        // Results array structure
+        let arr = json["results"].as_array().unwrap();
+        assert_eq!(arr.len(), 3);
+        // First result has sections
+        assert!(arr[0].get("sections").is_some());
+        let sections = arr[0]["sections"].as_array().unwrap();
+        assert_eq!(sections[0]["heading"], "## Intro");
+        assert_eq!(sections[0]["status"], "pass");
+        // Second result has reason
+        assert_eq!(arr[1]["reason"], "minimal_content");
+        // Third result has reason
+        assert_eq!(arr[2]["reason"], "file_not_found");
+    }
+
+    // -- validate: naming policy deserialization --
+
+    #[test]
+    fn load_policy_with_naming_section() {
+        let (tmp, project) = setup_with_policy(r###"
+            [policy]
+            enforce = "strict"
+
+            [policy.naming]
+            case = "kebab"
+            extension = ".md"
+            max_length = 30
+
+            [[policy.required]]
+            name = "PRD.md"
+        "###);
+        let policy = load_policy(tmp.path(), &project);
+        assert_eq!(policy.policy.enforce, "strict");
+        let naming = policy.policy.naming.as_ref().unwrap();
+        assert_eq!(naming.case, "kebab");
+        assert_eq!(naming.extension, ".md");
+        assert_eq!(naming.max_length, 30);
+    }
+
+    // -- validate: file exists but is completely empty (0 bytes) --
+
+    #[test]
+    fn validate_empty_zero_byte_file() {
+        let (tmp, project) = setup_with_policy(r###"
+            [policy]
+            [[policy.required]]
+            name = "PRD.md"
+        "###);
+        fs::write(tmp.path().join(&project).join("PRD.md"), "").unwrap();
+
+        let (_, results) = validate(tmp.path(), &project, None).unwrap();
+        // Empty file has 0 bytes < 100 → minimal_content warning
+        assert_eq!(results[0].status, FileStatus::Warn);
+        assert_eq!(results[0].reason.as_deref(), Some("minimal_content"));
+    }
 }

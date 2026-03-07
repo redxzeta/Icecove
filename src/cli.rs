@@ -167,11 +167,14 @@ fn shellexpand(s: &str) -> String {
 }
 
 fn save_docs_root(path: &Path) -> Result<()> {
-    let cfg_path = config_path();
+    save_docs_root_to(&config_path(), path)
+}
+
+fn save_docs_root_to(cfg_path: &Path, path: &Path) -> Result<()> {
     fs::create_dir_all(cfg_path.parent().unwrap())?;
 
     if cfg_path.exists() {
-        let content = fs::read_to_string(&cfg_path)?;
+        let content = fs::read_to_string(cfg_path)?;
         if content.contains("docs_root") {
             // Update existing
             let updated: String = content
@@ -185,14 +188,14 @@ fn save_docs_root(path: &Path) -> Result<()> {
                 })
                 .collect::<Vec<_>>()
                 .join("\n");
-            fs::write(&cfg_path, updated)?;
+            fs::write(cfg_path, updated)?;
         } else {
             // Prepend
             let updated = format!("docs_root = \"{}\"\n\n{}", path.display(), content);
-            fs::write(&cfg_path, updated)?;
+            fs::write(cfg_path, updated)?;
         }
     } else {
-        fs::write(&cfg_path, format!("docs_root = \"{}\"\n", path.display()))?;
+        fs::write(cfg_path, format!("docs_root = \"{}\"\n", path.display()))?;
     }
     Ok(())
 }
@@ -663,6 +666,19 @@ fn save_full_config(
     public_files: &[String],
 ) -> Result<()> {
     let cfg_path = config_path();
+    save_full_config_to(&cfg_path, docs_root, diagram_format, core_files, team_files, public_files)?;
+    println!("  {} {}", style("✓").green(), t!("setup.config_saved", path = cfg_path.display()));
+    Ok(())
+}
+
+fn save_full_config_to(
+    cfg_path: &Path,
+    docs_root: &Path,
+    diagram_format: &str,
+    core_files: &[String],
+    team_files: &[String],
+    public_files: &[String],
+) -> Result<()> {
     fs::create_dir_all(cfg_path.parent().unwrap())?;
 
     let fmt_list = |files: &[String]| -> String {
@@ -677,8 +693,407 @@ fn save_full_config(
         fmt_list(public_files),
         diagram_format,
     );
-    fs::write(&cfg_path, content)?;
-
-    println!("  {} {}", style("✓").green(), t!("setup.config_saved", path = cfg_path.display()));
+    fs::write(cfg_path, content)?;
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    // ── expand_path ──
+
+    #[test]
+    fn expand_path_absolute_unchanged() {
+        let p = expand_path("/usr/local/bin");
+        assert_eq!(p, PathBuf::from("/usr/local/bin"));
+    }
+
+    #[test]
+    fn expand_path_tilde_expands_to_home() {
+        let p = expand_path("~/Documents/test");
+        let expected = home().join("Documents/test");
+        assert_eq!(p, expected);
+    }
+
+    #[test]
+    fn expand_path_relative_unchanged() {
+        let p = expand_path("relative/path");
+        assert_eq!(p, PathBuf::from("relative/path"));
+    }
+
+    #[test]
+    fn expand_path_tilde_only_no_slash_unchanged() {
+        // "~foo" should NOT expand (only "~/" triggers expansion)
+        let p = expand_path("~foo");
+        assert_eq!(p, PathBuf::from("~foo"));
+    }
+
+    // ── shellexpand ──
+
+    #[test]
+    fn shellexpand_tilde() {
+        let s = shellexpand("~/my/path");
+        let expected = format!("{}/my/path", home().display());
+        assert_eq!(s, expected);
+    }
+
+    #[test]
+    fn shellexpand_no_tilde() {
+        let s = shellexpand("/absolute/path");
+        assert_eq!(s, "/absolute/path");
+    }
+
+    // ── binary_path ──
+
+    #[test]
+    fn binary_path_is_not_empty() {
+        let p = binary_path();
+        assert!(!p.as_os_str().is_empty());
+    }
+
+    // ── agents ──
+
+    #[test]
+    fn agents_returns_expected_count() {
+        let a = agents();
+        assert_eq!(a.len(), 8, "expected 8 agent definitions");
+    }
+
+    #[test]
+    fn agents_contains_known_names() {
+        let a = agents();
+        let names: Vec<&str> = a.iter().map(|x| x.name).collect();
+        assert!(names.contains(&"Claude Code"));
+        assert!(names.contains(&"Cursor"));
+        assert!(names.contains(&"Claude Desktop"));
+        assert!(names.contains(&"Cline (VS Code)"));
+        assert!(names.contains(&"OpenCode"));
+        assert!(names.contains(&"Codex CLI"));
+        assert!(names.contains(&"Antigravity"));
+        assert!(names.contains(&"Gemini CLI"));
+    }
+
+    #[test]
+    fn agents_all_have_mcp_config() {
+        let a = agents();
+        for agent in &a {
+            match &agent.mcp_config {
+                McpConfig::Json { path, server_key } => {
+                    assert!(!path.is_empty());
+                    assert!(!server_key.is_empty());
+                }
+                McpConfig::OpenCode { path } => assert!(!path.is_empty()),
+                McpConfig::Codex { path } => assert!(!path.is_empty()),
+            }
+        }
+    }
+
+    // ── DIAGRAM_FORMATS ──
+
+    #[test]
+    fn diagram_formats_has_expected_entries() {
+        assert_eq!(DIAGRAM_FORMATS.len(), 7);
+        let keys: Vec<&str> = DIAGRAM_FORMATS.iter().map(|(k, _)| *k).collect();
+        assert!(keys.contains(&"mermaid"));
+        assert!(keys.contains(&"plantuml"));
+        assert!(keys.contains(&"d2"));
+        assert!(keys.contains(&"ascii"));
+        assert!(keys.contains(&"graphviz"));
+        assert!(keys.contains(&"structurizr"));
+        assert!(keys.contains(&"excalidraw"));
+    }
+
+    #[test]
+    fn diagram_formats_all_have_labels() {
+        for (key, label) in DIAGRAM_FORMATS {
+            assert!(!key.is_empty());
+            assert!(!label.is_empty());
+        }
+    }
+
+    // ── CATEGORIES ──
+
+    #[test]
+    fn categories_has_three_entries() {
+        assert_eq!(CATEGORIES.len(), 3);
+    }
+
+    #[test]
+    fn categories_labels_match_expected() {
+        assert!(CATEGORIES[0].label.contains("Core"));
+        assert!(CATEGORIES[1].label.contains("Team"));
+        assert!(CATEGORIES[2].label.contains("Public"));
+    }
+
+    #[test]
+    fn categories_defaults_are_non_empty() {
+        for cat in CATEGORIES {
+            assert!(!cat.defaults.is_empty(), "category '{}' should have defaults", cat.label);
+        }
+    }
+
+    // ── install_skill_to ──
+
+    #[test]
+    fn install_skill_to_creates_skill_file() {
+        let tmp = TempDir::new().expect("failed to create temp dir");
+        let skill_dir = tmp.path().join("skills/alcove");
+        let result = install_skill_to(&skill_dir);
+        assert!(result.is_ok());
+
+        let skill_path = skill_dir.join("SKILL.md");
+        assert!(skill_path.exists());
+
+        let content = fs::read_to_string(&skill_path).expect("failed to read SKILL.md");
+        assert_eq!(content, SKILL_CONTENT);
+    }
+
+    #[test]
+    fn install_skill_to_overwrites_existing() {
+        let tmp = TempDir::new().expect("failed to create temp dir");
+        let skill_dir = tmp.path().join("skills");
+        fs::create_dir_all(&skill_dir).expect("failed to create dir");
+        fs::write(skill_dir.join("SKILL.md"), "old content").expect("failed to write");
+
+        let result = install_skill_to(&skill_dir);
+        assert!(result.is_ok());
+
+        let content = fs::read_to_string(skill_dir.join("SKILL.md")).expect("failed to read");
+        assert_eq!(content, SKILL_CONTENT);
+    }
+
+    // ── write_json_mcp ──
+
+    #[test]
+    fn write_json_mcp_creates_new_file() {
+        let tmp = TempDir::new().expect("failed to create temp dir");
+        let cfg = tmp.path().join("mcp.json");
+        let bin = PathBuf::from("/usr/local/bin/alcove");
+        let docs = PathBuf::from("/docs/root");
+
+        let result = write_json_mcp(&cfg, "mcpServers", &bin, &docs);
+        assert!(result.is_ok());
+        assert!(cfg.exists());
+
+        let content = fs::read_to_string(&cfg).expect("failed to read");
+        let parsed: serde_json::Value = serde_json::from_str(&content).expect("invalid json");
+
+        assert_eq!(
+            parsed["mcpServers"]["alcove"]["command"],
+            "/usr/local/bin/alcove"
+        );
+        assert_eq!(
+            parsed["mcpServers"]["alcove"]["env"]["DOCS_ROOT"],
+            "/docs/root"
+        );
+    }
+
+    #[test]
+    fn write_json_mcp_merges_with_existing() {
+        let tmp = TempDir::new().expect("failed to create temp dir");
+        let cfg = tmp.path().join("mcp.json");
+
+        let existing = serde_json::json!({
+            "mcpServers": {
+                "other": { "command": "other-tool" }
+            }
+        });
+        fs::write(&cfg, serde_json::to_string_pretty(&existing).unwrap())
+            .expect("failed to write");
+
+        let bin = PathBuf::from("/bin/alcove");
+        let docs = PathBuf::from("/docs");
+
+        let result = write_json_mcp(&cfg, "mcpServers", &bin, &docs);
+        assert!(result.is_ok());
+
+        let content = fs::read_to_string(&cfg).expect("failed to read");
+        let parsed: serde_json::Value = serde_json::from_str(&content).expect("invalid json");
+
+        // Existing entry preserved
+        assert_eq!(parsed["mcpServers"]["other"]["command"], "other-tool");
+        // New entry added
+        assert_eq!(parsed["mcpServers"]["alcove"]["command"], "/bin/alcove");
+    }
+
+    #[test]
+    fn write_json_mcp_creates_parent_dirs() {
+        let tmp = TempDir::new().expect("failed to create temp dir");
+        let cfg = tmp.path().join("deep/nested/mcp.json");
+        let bin = PathBuf::from("/bin/alcove");
+        let docs = PathBuf::from("/docs");
+
+        let result = write_json_mcp(&cfg, "mcpServers", &bin, &docs);
+        assert!(result.is_ok());
+        assert!(cfg.exists());
+    }
+
+    // ── write_opencode_mcp ──
+
+    #[test]
+    fn write_opencode_mcp_creates_new_file() {
+        let tmp = TempDir::new().expect("failed to create temp dir");
+        let cfg = tmp.path().join("opencode.json");
+        let bin = PathBuf::from("/bin/alcove");
+        let docs = PathBuf::from("/docs");
+
+        let result = write_opencode_mcp(&cfg, &bin, &docs);
+        assert!(result.is_ok());
+
+        let content = fs::read_to_string(&cfg).expect("failed to read");
+        let parsed: serde_json::Value = serde_json::from_str(&content).expect("invalid json");
+
+        assert_eq!(parsed["mcp"]["alcove"]["type"], "local");
+        assert_eq!(parsed["mcp"]["alcove"]["command"][0], "/bin/alcove");
+        assert_eq!(parsed["mcp"]["alcove"]["environment"]["DOCS_ROOT"], "/docs");
+    }
+
+    #[test]
+    fn write_opencode_mcp_merges_existing() {
+        let tmp = TempDir::new().expect("failed to create temp dir");
+        let cfg = tmp.path().join("opencode.json");
+
+        let existing = serde_json::json!({ "mcp": { "other": { "type": "remote" } } });
+        fs::write(&cfg, serde_json::to_string(&existing).unwrap()).expect("failed to write");
+
+        let result = write_opencode_mcp(&cfg, &PathBuf::from("/bin/alcove"), &PathBuf::from("/docs"));
+        assert!(result.is_ok());
+
+        let content = fs::read_to_string(&cfg).expect("failed to read");
+        let parsed: serde_json::Value = serde_json::from_str(&content).expect("invalid json");
+
+        assert_eq!(parsed["mcp"]["other"]["type"], "remote");
+        assert_eq!(parsed["mcp"]["alcove"]["type"], "local");
+    }
+
+    // ── write_codex_mcp ──
+
+    #[test]
+    fn write_codex_mcp_creates_new_file() {
+        let tmp = TempDir::new().expect("failed to create temp dir");
+        let cfg = tmp.path().join("config.toml");
+        let bin = PathBuf::from("/bin/alcove");
+        let docs = PathBuf::from("/docs");
+
+        let result = write_codex_mcp(&cfg, &bin, &docs);
+        assert!(result.is_ok());
+
+        let content = fs::read_to_string(&cfg).expect("failed to read");
+        assert!(content.contains("[mcp_servers.alcove]"));
+        assert!(content.contains(r#"command = "/bin/alcove""#));
+        assert!(content.contains(r#"DOCS_ROOT = "/docs""#));
+    }
+
+    #[test]
+    fn write_codex_mcp_appends_to_existing() {
+        let tmp = TempDir::new().expect("failed to create temp dir");
+        let cfg = tmp.path().join("config.toml");
+
+        fs::write(&cfg, "[some_other_section]\nkey = \"value\"\n").expect("failed to write");
+
+        let result = write_codex_mcp(&cfg, &PathBuf::from("/bin/alcove"), &PathBuf::from("/docs"));
+        assert!(result.is_ok());
+
+        let content = fs::read_to_string(&cfg).expect("failed to read");
+        assert!(content.contains("[some_other_section]"));
+        assert!(content.contains("[mcp_servers.alcove]"));
+    }
+
+    #[test]
+    fn write_codex_mcp_skips_if_already_configured() {
+        let tmp = TempDir::new().expect("failed to create temp dir");
+        let cfg = tmp.path().join("config.toml");
+
+        let original = "[mcp_servers.alcove]\ncommand = \"/old/bin\"\n";
+        fs::write(&cfg, original).expect("failed to write");
+
+        let result = write_codex_mcp(&cfg, &PathBuf::from("/new/bin"), &PathBuf::from("/docs"));
+        assert!(result.is_ok());
+
+        // Content should be unchanged (skipped)
+        let content = fs::read_to_string(&cfg).expect("failed to read");
+        assert_eq!(content, original);
+    }
+
+    // ── save_docs_root_to ──
+
+    #[test]
+    fn save_docs_root_creates_new_config() {
+        let tmp = TempDir::new().expect("failed to create temp dir");
+        let cfg = tmp.path().join("config.toml");
+        let docs = tmp.path().join("my_docs");
+
+        let result = save_docs_root_to(&cfg, &docs);
+        assert!(result.is_ok());
+        assert!(cfg.exists());
+
+        let content = fs::read_to_string(&cfg).expect("failed to read");
+        assert!(content.starts_with("docs_root = "));
+        assert!(content.contains(&docs.display().to_string()));
+    }
+
+    #[test]
+    fn save_docs_root_updates_existing_docs_root() {
+        let tmp = TempDir::new().expect("failed to create temp dir");
+        let cfg = tmp.path().join("config.toml");
+        fs::write(&cfg, "docs_root = \"/old/path\"\nother = \"keep\"\n")
+            .expect("failed to write");
+
+        let new_docs = tmp.path().join("new_docs");
+        let result = save_docs_root_to(&cfg, &new_docs);
+        assert!(result.is_ok());
+
+        let content = fs::read_to_string(&cfg).expect("failed to read");
+        assert!(content.contains(&new_docs.display().to_string()));
+        assert!(!content.contains("/old/path"));
+        assert!(content.contains("other = \"keep\""));
+    }
+
+    #[test]
+    fn save_docs_root_prepends_when_no_docs_root_key() {
+        let tmp = TempDir::new().expect("failed to create temp dir");
+        let cfg = tmp.path().join("config.toml");
+        fs::write(&cfg, "[diagram]\nformat = \"mermaid\"\n").expect("failed to write");
+
+        let docs = tmp.path().join("docs");
+        let result = save_docs_root_to(&cfg, &docs);
+        assert!(result.is_ok());
+
+        let content = fs::read_to_string(&cfg).expect("failed to read");
+        assert!(content.starts_with("docs_root = "));
+        assert!(content.contains("[diagram]"));
+    }
+
+    // ── save_full_config_to ──
+
+    #[test]
+    fn save_full_config_writes_all_sections() {
+        let tmp = TempDir::new().expect("failed to create temp dir");
+        let cfg = tmp.path().join("config.toml");
+        let docs = tmp.path().join("docs");
+        let core = vec!["PRD.md".to_string(), "ARCHITECTURE.md".to_string()];
+        let team = vec!["ENV_SETUP.md".to_string()];
+        let public = vec!["README.md".to_string()];
+
+        let result = save_full_config_to(&cfg, &docs, "mermaid", &core, &team, &public);
+        assert!(result.is_ok());
+
+        let content = fs::read_to_string(&cfg).expect("failed to read");
+        assert!(content.contains(&docs.display().to_string()));
+        assert!(content.contains("[core]"));
+        assert!(content.contains("\"PRD.md\""));
+        assert!(content.contains("\"ARCHITECTURE.md\""));
+        assert!(content.contains("[team]"));
+        assert!(content.contains("\"ENV_SETUP.md\""));
+        assert!(content.contains("[public]"));
+        assert!(content.contains("\"README.md\""));
+        assert!(content.contains("[diagram]"));
+        assert!(content.contains("format = \"mermaid\""));
+    }
 }
