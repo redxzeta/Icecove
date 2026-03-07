@@ -66,7 +66,7 @@ Alcove는 모든 프라이빗 문서를 프로젝트별로 정리된 **하나의
 - **표준화된 문서 구조** — `policy.toml`로 모든 프로젝트와 팀에 일관된 문서를 적용
 - **크로스 레포 감사** — 프로젝트 저장소에 잘못 배치된 내부 문서를 찾아 수정 제안
 - **문서 검증** — 누락된 파일, 미작성 템플릿, 필수 섹션 확인
-- **8개 이상 에이전트 지원** — Claude Code, Cursor, Claude Desktop, Cline, OpenCode, Codex, Antigravity, Gemini CLI
+- **9개 이상 에이전트 지원** — Claude Code, Cursor, Claude Desktop, Cline, OpenCode, Codex, Copilot, Antigravity, Gemini CLI
 
 ## Alcove를 사용하는 이유
 
@@ -123,6 +123,7 @@ flowchart LR
         AG2(Cursor)
         AG3(Gemini CLI)
         AG4(Codex)
+        AG5(Copilot)
     end
 
     subgraph MCP["Alcove MCP 서버"]
@@ -243,10 +244,11 @@ format = "mermaid"
 | Claude Code | `~/.claude.json` | `~/.claude/skills/alcove/` |
 | Cursor | `~/.cursor/mcp.json` | `~/.cursor/skills/alcove/` |
 | Claude Desktop | 플랫폼 설정 | — |
-| Cline (VS Code) | VS Code globalStorage | — |
+| Cline (VS Code) | VS Code globalStorage | `~/.cline/skills/alcove/` |
 | OpenCode | `~/.config/opencode/opencode.json` | `~/.opencode/skills/alcove/` |
-| Codex CLI | `~/.codex/config.toml` | — |
-| Antigravity | `~/.antigravity/settings.json` | — |
+| Codex CLI | `~/.codex/config.toml` | `~/.codex/skills/alcove/` |
+| Copilot CLI | `~/.copilot/mcp-config.json` | `~/.copilot/skills/alcove/` |
+| Antigravity | `~/.gemini/antigravity/mcp_config.json` | — |
 | Gemini CLI | `~/.gemini/settings.json` | `~/.gemini/skills/alcove/` |
 
 ## 지원 언어

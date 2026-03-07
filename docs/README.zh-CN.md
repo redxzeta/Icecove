@@ -64,7 +64,7 @@ Alcove 将所有私有文档保存在**一个共享仓库**中，按项目组织
 - **标准化文档结构** —— `policy.toml` 在所有项目和团队中强制执行一致的文档规范
 - **跨仓库审计** —— 发现意外推送到 GitHub 的内部文档并建议修复
 - **文档验证** —— 检查缺失文件、未填充模板、必需章节
-- **支持 8+ 个代理** —— Claude Code、Cursor、Claude Desktop、Cline、OpenCode、Codex、Antigravity、Gemini CLI
+- **支持 9+ 个代理** —— Claude Code、Cursor、Claude Desktop、Cline、OpenCode、Codex、Copilot、Antigravity、Gemini CLI
 
 ## 为什么选择 Alcove
 
@@ -121,6 +121,7 @@ flowchart LR
         AG2(Cursor)
         AG3(Gemini CLI)
         AG4(Codex)
+        AG5(Copilot)
     end
 
     subgraph MCP["Alcove MCP 服务器"]
@@ -230,10 +231,11 @@ format = "mermaid"
 | Claude Code | `~/.claude.json` | `~/.claude/skills/alcove/` |
 | Cursor | `~/.cursor/mcp.json` | `~/.cursor/skills/alcove/` |
 | Claude Desktop | 平台配置 | — |
-| Cline (VS Code) | VS Code globalStorage | — |
+| Cline (VS Code) | VS Code globalStorage | `~/.cline/skills/alcove/` |
 | OpenCode | `~/.config/opencode/opencode.json` | `~/.opencode/skills/alcove/` |
-| Codex CLI | `~/.codex/config.toml` | — |
-| Antigravity | `~/.antigravity/settings.json` | — |
+| Codex CLI | `~/.codex/config.toml` | `~/.codex/skills/alcove/` |
+| Copilot CLI | `~/.copilot/mcp-config.json` | `~/.copilot/skills/alcove/` |
+| Antigravity | `~/.gemini/antigravity/mcp_config.json` | — |
 | Gemini CLI | `~/.gemini/settings.json` | `~/.gemini/skills/alcove/` |
 
 ## 支持的语言

@@ -66,7 +66,7 @@ Alcove keeps all your private docs in **one shared repository**, organized by pr
 - **Standardized doc structure** — `policy.toml` enforces consistent docs across all projects and teams
 - **Cross-repo audit** — finds internal docs misplaced in your project repo, suggests fixes
 - **Document validation** — checks for missing files, unfilled templates, required sections
-- **Works with 8+ agents** — Claude Code, Cursor, Claude Desktop, Cline, OpenCode, Codex, Antigravity, Gemini CLI
+- **Works with 9+ agents** — Claude Code, Cursor, Claude Desktop, Cline, OpenCode, Codex, Copilot, Antigravity, Gemini CLI
 
 ## Why Alcove
 
@@ -123,6 +123,7 @@ flowchart LR
         AG2(Cursor)
         AG3(Gemini CLI)
         AG4(Codex)
+        AG5(Copilot)
     end
 
     subgraph MCP["Alcove MCP server"]
@@ -243,10 +244,11 @@ All of this is set interactively via `alcove setup`. You can also edit the file 
 | Claude Code | `~/.claude.json` | `~/.claude/skills/alcove/` |
 | Cursor | `~/.cursor/mcp.json` | `~/.cursor/skills/alcove/` |
 | Claude Desktop | platform config | — |
-| Cline (VS Code) | VS Code globalStorage | — |
+| Cline (VS Code) | VS Code globalStorage | `~/.cline/skills/alcove/` |
 | OpenCode | `~/.config/opencode/opencode.json` | `~/.opencode/skills/alcove/` |
-| Codex CLI | `~/.codex/config.toml` | — |
-| Antigravity | `~/.antigravity/settings.json` | — |
+| Codex CLI | `~/.codex/config.toml` | `~/.codex/skills/alcove/` |
+| Copilot CLI | `~/.copilot/mcp-config.json` | `~/.copilot/skills/alcove/` |
+| Antigravity | `~/.gemini/antigravity/mcp_config.json` | — |
 | Gemini CLI | `~/.gemini/settings.json` | `~/.gemini/skills/alcove/` |
 
 ## Supported languages

@@ -88,9 +88,14 @@ fn agents() -> Vec<AgentDef> {
             skill_dir: Some("~/.codex/skills/alcove"),
         },
         AgentDef {
+            name: "Copilot CLI",
+            mcp_config: McpConfig::Json { path: "~/.copilot/mcp-config.json", server_key: "mcpServers" },
+            skill_dir: Some("~/.copilot/skills/alcove"),
+        },
+        AgentDef {
             name: "Antigravity",
-            mcp_config: McpConfig::Json { path: "~/.antigravity/settings.json", server_key: "mcpServers" },
-            skill_dir: None,
+            mcp_config: McpConfig::Json { path: "~/.gemini/antigravity/mcp_config.json", server_key: "mcpServers" },
+            skill_dir: None, // skills.txt references external skill dirs
         },
         AgentDef {
             name: "Gemini CLI",
@@ -521,6 +526,7 @@ pub fn cmd_uninstall() -> Result<()> {
         "~/.cline/skills/alcove",
         "~/.opencode/skills/alcove",
         "~/.codex/skills/alcove",
+        "~/.copilot/skills/alcove",
         "~/.gemini/skills/alcove",
     ];
     for d in &skill_dirs {
@@ -554,7 +560,8 @@ pub fn cmd_uninstall() -> Result<()> {
     println!("    Cline:          ~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json");
     println!("    OpenCode:       ~/.config/opencode/opencode.json");
     println!("    Codex:          ~/.codex/config.toml");
-    println!("    Antigravity:    ~/.antigravity/settings.json");
+    println!("    Copilot CLI:    ~/.copilot/mcp-config.json");
+    println!("    Antigravity:    ~/.gemini/antigravity/mcp_config.json");
     println!("    Gemini CLI:     ~/.gemini/settings.json");
     println!();
 
@@ -765,7 +772,7 @@ mod tests {
     #[test]
     fn agents_returns_expected_count() {
         let a = agents();
-        assert_eq!(a.len(), 8, "expected 8 agent definitions");
+        assert_eq!(a.len(), 9, "expected 9 agent definitions");
     }
 
     #[test]
