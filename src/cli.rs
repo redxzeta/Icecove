@@ -75,7 +75,7 @@ fn agents() -> Vec<AgentDef> {
                 },
                 server_key: "mcpServers",
             },
-            skill_dir: None,
+            skill_dir: Some("~/.cline/skills/alcove"),
         },
         AgentDef {
             name: "OpenCode",
@@ -85,7 +85,7 @@ fn agents() -> Vec<AgentDef> {
         AgentDef {
             name: "Codex CLI",
             mcp_config: McpConfig::Codex { path: "~/.codex/config.toml" },
-            skill_dir: None,
+            skill_dir: Some("~/.codex/skills/alcove"),
         },
         AgentDef {
             name: "Antigravity",
@@ -518,7 +518,9 @@ pub fn cmd_uninstall() -> Result<()> {
     let skill_dirs = [
         "~/.claude/skills/alcove",
         "~/.cursor/skills/alcove",
+        "~/.cline/skills/alcove",
         "~/.opencode/skills/alcove",
+        "~/.codex/skills/alcove",
         "~/.gemini/skills/alcove",
     ];
     for d in &skill_dirs {
@@ -549,6 +551,7 @@ pub fn cmd_uninstall() -> Result<()> {
     println!("    Claude Code:    ~/.claude.json");
     println!("    Cursor:         ~/.cursor/mcp.json");
     println!("    Claude Desktop: ~/Library/Application Support/Claude/claude_desktop_config.json");
+    println!("    Cline:          ~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json");
     println!("    OpenCode:       ~/.config/opencode/opencode.json");
     println!("    Codex:          ~/.codex/config.toml");
     println!("    Antigravity:    ~/.antigravity/settings.json");
