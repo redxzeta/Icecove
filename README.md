@@ -28,9 +28,13 @@ Alcove is an MCP server that gives AI coding agents scoped, read-only access to 
 
 ## The problem
 
-You have internal docs — PRDs, architecture decisions, deployment runbooks, secrets maps — that shouldn't live in your GitHub repo. But your AI agent can't help you if it can't read them.
+You're developing multiple projects simultaneously, switching between different AI coding agents. Each project has internal docs — PRDs, architecture decisions, deployment runbooks, secrets maps — that shouldn't live in your public GitHub repo.
 
-Alcove sits between your private docs and your AI agents. It auto-detects which project you're working on from your terminal's CWD, and serves only that project's docs through the MCP protocol.
+But your AI agent can't help you properly if it can't read them. It invents requirements. It ignores constraints you already documented. And every time you switch agents or projects, you lose context.
+
+## How Alcove solves this
+
+Alcove keeps all your private docs in **one shared repository**, organized by project. Any MCP-compatible agent accesses them the same way — whether you're in Claude Code, Cursor, Gemini CLI, or Codex.
 
 ```
 ~/projects/my-app $ claude "how is auth implemented?"
@@ -40,13 +44,38 @@ Alcove sits between your private docs and your AI agents. It auto-detects which 
   → Agent answers with actual project context
 ```
 
+```
+~/projects/my-api $ codex "review the API design"
+
+  → Alcove detects project: my-api
+  → Same doc structure, same access pattern
+  → Different project, same workflow
+```
+
+**Switch agents anytime. Switch projects anytime. The document layer stays standardized.**
+
 ## What it does
 
-- **Auto-detects your project** from CWD — no config per project
+- **One doc-repo, multiple projects** — private docs organized by project, managed in a single place
+- **One setup, any agent** — configure once, every MCP-compatible agent gets the same access
+- **Auto-detects your project** from CWD — no per-project config needed
 - **Scoped access** — each project only sees its own docs
-- **Private by design** — docs stay in your local documents repo, never exposed
+- **Private docs stay private** — sensitive docs (secrets map, internal decisions, tech debt) never touch your public repo
+- **Standardized doc structure** — `policy.toml` enforces consistent docs across all projects and teams
 - **Cross-repo audit** — finds internal docs accidentally pushed to GitHub, suggests fixes
+- **Document validation** — checks for missing files, unfilled templates, required sections
 - **Works with 8+ agents** — Claude Code, Cursor, Claude Desktop, Cline, OpenCode, Codex, Antigravity, Gemini CLI
+
+## Why Alcove
+
+| Without Alcove | With Alcove |
+|----------------|-------------|
+| Internal docs scattered across Notion, Google Docs, local files | One doc-repo, structured by project |
+| Each AI agent configured separately for doc access | One setup, all agents share the same access |
+| Switching projects means losing doc context | CWD auto-detection, instant project switch |
+| Sensitive docs risk leaking into public repos | Private docs physically separated from project repos |
+| Doc structure differs per project and team member | `policy.toml` enforces standards across all projects |
+| No way to check if docs are complete | `validate` catches missing files, empty templates, missing sections |
 
 ## Quick start
 
@@ -81,9 +110,17 @@ flowchart LR
         A2["my-api/\n  src/ ..."]
     end
 
-    subgraph Docs["Your private docs"]
+    subgraph Docs["Your private docs (one repo)"]
         D1["my-app/\n  PRD.md\n  ARCH.md"]
         D2["my-api/\n  PRD.md\n  ..."]
+        P1["policy.toml"]
+    end
+
+    subgraph Agents["Any MCP agent"]
+        AG1(Claude Code)
+        AG2(Cursor)
+        AG3(Gemini CLI)
+        AG4(Codex)
     end
 
     subgraph MCP["Alcove MCP server"]
@@ -93,15 +130,16 @@ flowchart LR
         T4(audit)
         T5(init)
         T6(list)
+        T7(validate)
     end
 
     A1 -- "CWD detected" --> D1
     A2 -- "CWD detected" --> D2
-    MCP -- "read" --> D1
-    MCP -- "read" --> D2
+    Agents -- "stdio MCP" --> MCP
+    MCP -- "read-only" --> Docs
 ```
 
-Your docs are organized in a separate directory (`DOCS_ROOT`). Alcove reads from there and serves it to your AI agent over MCP's stdio protocol. Your agent calls tools like `get_doc_file("PRD.md")` and gets project-specific answers.
+Your docs are organized in a separate directory (`DOCS_ROOT`), one folder per project. Alcove reads from there and serves it to any MCP-compatible AI agent over stdio. Your agent calls tools like `get_doc_file("PRD.md")` and gets project-specific answers — regardless of which agent you're using.
 
 ## Document classification
 
@@ -125,14 +163,38 @@ The `audit` tool checks both locations and suggests actions — like generating 
 | `list_projects` | Show all projects in your docs repo |
 | `audit_project` | Cross-repo audit with suggested actions |
 | `init_project` | Scaffold docs for a new project from template |
+| `validate_docs` | Validate docs against team policy (`policy.toml`) |
 
 ## CLI
 
 ```
 alcove              Start MCP server (agents call this)
 alcove setup        Interactive setup — re-run anytime to reconfigure
+alcove validate     Validate docs against policy (--format json, --exit-code)
 alcove uninstall    Remove skills, config, and legacy files
 ```
+
+## Document policy
+
+Define team-wide documentation standards with `policy.toml` in your docs repo:
+
+```toml
+[policy]
+enforce = "strict"    # strict | warn | off
+
+[[policy.required_docs]]
+file = "PRD.md"
+aliases = ["prd.md", "product-requirements.md"]
+
+[[policy.required_docs]]
+file = "ARCHITECTURE.md"
+sections = [
+  { heading = "## Overview" },
+  { heading = "## Components", min_items = 2 },
+]
+```
+
+Policy files are resolved with priority: **project** > **team** > **default**. This ensures consistent doc quality across all your projects while allowing per-project overrides.
 
 ## Configuration
 
@@ -155,19 +217,6 @@ format = "mermaid"
 ```
 
 All of this is set interactively via `alcove setup`. You can also edit the file directly.
-
-## Update
-
-```bash
-cargo install alcove
-```
-
-## Uninstall
-
-```bash
-alcove uninstall          # remove skills & config
-cargo uninstall alcove    # remove binary
-```
 
 ## Supported agents
 
@@ -202,6 +251,19 @@ The CLI automatically detects your system locale. You can also override it with 
 ```bash
 # Override language
 ALCOVE_LANG=ko alcove setup
+```
+
+## Update
+
+```bash
+cargo install alcove
+```
+
+## Uninstall
+
+```bash
+alcove uninstall          # remove skills & config
+cargo uninstall alcove    # remove binary
 ```
 
 ## License

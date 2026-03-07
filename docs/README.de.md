@@ -28,9 +28,13 @@ Alcove ist ein MCP-Server, der KI-Codierungs-Agenten einen bereichsbezogenen, sc
 
 ## Das Problem
 
-Du hast interne Dokumente — PRDs, Architekturentscheidungen, Deployment-Runbooks, Secret-Maps — die nicht in deinem GitHub-Repository sein sollten. Aber dein KI-Agent kann dir nicht helfen, wenn er sie nicht lesen kann.
+Du entwickelst mehrere Projekte gleichzeitig und wechselst zwischen verschiedenen KI-Codierungs-Agenten. Jedes Projekt hat interne Dokumente — PRDs, Architekturentscheidungen, Deployment-Runbooks, Secret-Maps — die nicht in deinem öffentlichen GitHub-Repository sein sollten.
 
-Alcove sitzt zwischen deinen privaten Dokumenten und deinen KI-Agenten. Es erkennt automatisch anhand des CWD deines Terminals, an welchem Projekt du arbeitest, und stellt nur die Dokumente dieses Projekts über das MCP-Protokoll bereit.
+Aber dein KI-Agent kann dir nicht richtig helfen, wenn er sie nicht lesen kann. Er erfindet Anforderungen. Er ignoriert Einschränkungen, die du bereits dokumentiert hast. Und jedes Mal, wenn du den Agenten oder das Projekt wechselst, geht der Kontext verloren.
+
+## Wie Alcove das löst
+
+Alcove speichert alle deine privaten Dokumente in **einem gemeinsamen Repository**, organisiert nach Projekt. Jeder MCP-kompatible Agent greift auf dieselbe Weise darauf zu — egal ob du Claude Code, Cursor, Gemini CLI oder Codex verwendest.
 
 ```
 ~/projects/my-app $ claude "Wie ist die Authentifizierung implementiert?"
@@ -40,13 +44,38 @@ Alcove sitzt zwischen deinen privaten Dokumenten und deinen KI-Agenten. Es erken
   → Agent antwortet mit echtem Projektkontext
 ```
 
+```
+~/projects/my-api $ codex "Überprüfe das API-Design"
+
+  → Alcove erkennt Projekt: my-api
+  → Gleiche Dokumentstruktur, gleiches Zugriffsmuster
+  → Anderes Projekt, gleicher Workflow
+```
+
+**Wechsle den Agenten jederzeit. Wechsle das Projekt jederzeit. Die Dokumentschicht bleibt standardisiert.**
+
 ## Hauptfunktionen
 
-- **Automatische Projekterkennung** — CWD-basiert, keine Konfiguration pro Projekt
+- **Ein Docs-Repository, mehrere Projekte** — private Dokumente nach Projekt organisiert, an einem Ort verwaltet
+- **Einmal einrichten, jeder Agent** — einmal konfigurieren, jeder MCP-kompatible Agent erhält denselben Zugriff
+- **Automatische Projekterkennung** vom CWD — keine Konfiguration pro Projekt nötig
 - **Bereichsbezogener Zugriff** — jedes Projekt sieht nur seine eigenen Dokumente
-- **Privacy by Design** — Dokumente bleiben in deinem lokalen Docs-Repository, werden nie exponiert
+- **Private Dokumente bleiben privat** — sensible Dokumente (Secret-Map, interne Entscheidungen, technische Schulden) berühren nie dein öffentliches Repository
+- **Standardisierte Dokumentstruktur** — `policy.toml` erzwingt konsistente Dokumente über alle Projekte und Teams
 - **Cross-Repo-Audit** — findet versehentlich auf GitHub gepushte interne Dokumente und schlägt Korrekturen vor
+- **Dokumentvalidierung** — prüft auf fehlende Dateien, unausgefüllte Templates, erforderliche Abschnitte
 - **Funktioniert mit 8+ Agenten** — Claude Code, Cursor, Claude Desktop, Cline, OpenCode, Codex, Antigravity, Gemini CLI
+
+## Warum Alcove
+
+| Ohne Alcove | Mit Alcove |
+|-------------|------------|
+| Interne Dokumente verstreut über Notion, Google Docs, lokale Dateien | Ein Docs-Repository, nach Projekt strukturiert |
+| Jeder KI-Agent separat für Dokumentzugriff konfiguriert | Einmal einrichten, alle Agenten teilen denselben Zugriff |
+| Projektwechsel bedeutet Verlust des Dokumentkontexts | CWD-Autoerkennung, sofortiger Projektwechsel |
+| Sensible Dokumente riskieren Leak in öffentliche Repos | Private Dokumente physisch von Projekt-Repos getrennt |
+| Dokumentstruktur variiert pro Projekt und Teammitglied | `policy.toml` erzwingt Standards über alle Projekte |
+| Keine Möglichkeit zu prüfen, ob Dokumente vollständig sind | `validate` erkennt fehlende Dateien, leere Templates, fehlende Abschnitte |
 
 ## Schnellstart
 
@@ -81,9 +110,17 @@ flowchart LR
         A2["my-api/\n  src/ ..."]
     end
 
-    subgraph Docs["Deine privaten Dokumente"]
+    subgraph Docs["Deine privaten Dokumente (ein Repository)"]
         D1["my-app/\n  PRD.md\n  ARCH.md"]
         D2["my-api/\n  PRD.md\n  ..."]
+        P1["policy.toml"]
+    end
+
+    subgraph Agents["Jeder MCP-Agent"]
+        AG1(Claude Code)
+        AG2(Cursor)
+        AG3(Gemini CLI)
+        AG4(Codex)
     end
 
     subgraph MCP["Alcove MCP-Server"]
@@ -93,15 +130,16 @@ flowchart LR
         T4(audit)
         T5(init)
         T6(list)
+        T7(validate)
     end
 
     A1 -- "CWD erkannt" --> D1
     A2 -- "CWD erkannt" --> D2
-    MCP -- "lesen" --> D1
-    MCP -- "lesen" --> D2
+    Agents -- "stdio MCP" --> MCP
+    MCP -- "schreibgeschützt" --> Docs
 ```
 
-Deine Dokumente sind in einem separaten Verzeichnis (`DOCS_ROOT`) organisiert. Alcove liest von dort und stellt sie deinem KI-Agenten über das stdio-Protokoll von MCP bereit. Dein Agent ruft Tools wie `get_doc_file("PRD.md")` auf und erhält projektspezifische Antworten.
+Deine Dokumente sind in einem separaten Verzeichnis (`DOCS_ROOT`) organisiert, ein Ordner pro Projekt. Alcove liest von dort und stellt sie jedem MCP-kompatiblen KI-Agenten über stdio bereit. Dein Agent ruft Tools wie `get_doc_file("PRD.md")` auf und erhält projektspezifische Antworten — unabhängig davon, welchen Agenten du verwendest.
 
 ## Dokumentklassifizierung
 
@@ -125,14 +163,38 @@ Das `audit`-Tool prüft beide Orte und schlägt Aktionen vor — wie das Generie
 | `list_projects` | Alle Projekte im Docs-Repository anzeigen |
 | `audit_project` | Cross-Repo-Audit mit vorgeschlagenen Aktionen |
 | `init_project` | Dokumente für ein neues Projekt aus Vorlage erstellen |
+| `validate_docs` | Dokumente gegen Team-Policy (`policy.toml`) validieren |
 
 ## CLI
 
 ```
 alcove              MCP-Server starten (Agenten rufen das auf)
 alcove setup        Interaktives Setup — jederzeit erneut ausführen
+alcove validate     Dokumente gegen Policy validieren (--format json, --exit-code)
 alcove uninstall    Skills, Konfiguration und Legacy-Dateien entfernen
 ```
+
+## Dokumentrichtlinie
+
+Definiere teamweite Dokumentationsstandards mit `policy.toml` in deinem Docs-Repository:
+
+```toml
+[policy]
+enforce = "strict"    # strict | warn | off
+
+[[policy.required_docs]]
+file = "PRD.md"
+aliases = ["prd.md", "product-requirements.md"]
+
+[[policy.required_docs]]
+file = "ARCHITECTURE.md"
+sections = [
+  { heading = "## Overview" },
+  { heading = "## Components", min_items = 2 },
+]
+```
+
+Policy-Dateien werden mit Priorität aufgelöst: **Projekt** > **Team** > **Standard**. Dies stellt konsistente Dokumentqualität über alle Projekte sicher und erlaubt projektspezifische Überschreibungen.
 
 ## Konfiguration
 
@@ -155,19 +217,6 @@ format = "mermaid"
 ```
 
 Alles wird interaktiv über `alcove setup` eingestellt. Du kannst die Datei auch direkt bearbeiten.
-
-## Aktualisieren
-
-```bash
-cargo install alcove
-```
-
-## Deinstallieren
-
-```bash
-alcove uninstall          # Skills & Konfiguration entfernen
-cargo uninstall alcove    # Binary entfernen
-```
 
 ## Unterstützte Agenten
 
@@ -202,6 +251,19 @@ Das CLI erkennt automatisch deine Systemsprache. Du kannst sie auch mit der Umge
 ```bash
 # Sprache überschreiben
 ALCOVE_LANG=de alcove setup
+```
+
+## Aktualisieren
+
+```bash
+cargo install alcove
+```
+
+## Deinstallieren
+
+```bash
+alcove uninstall          # Skills & Konfiguration entfernen
+cargo uninstall alcove    # Binary entfernen
 ```
 
 ## Lizenz
