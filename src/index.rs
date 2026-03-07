@@ -139,7 +139,7 @@ impl IndexMeta {
 fn file_mtime_secs(path: &Path) -> u64 {
     std::fs::metadata(path)
         .and_then(|m| m.modified())
-        .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e)))
+        .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).map_err(std::io::Error::other))
         .map(|d| d.as_secs())
         .unwrap_or(0)
 }
@@ -463,11 +463,10 @@ pub fn search_indexed(docs_root: &Path, query: &str, limit: usize, project_filte
             .to_string();
 
         // Apply project filter if specified
-        if let Some(filter) = project_filter {
-            if project != filter {
+        if let Some(filter) = project_filter
+            && project != filter {
                 continue;
             }
-        }
 
         let file = doc.get_first(file_field)
             .and_then(|v| schema::Value::as_str(&v))

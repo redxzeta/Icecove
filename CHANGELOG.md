@@ -5,6 +5,34 @@ All notable changes to alcove will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] — 2026-03-08
+
+### Added
+
+- BM25 ranked search powered by tantivy with auto-indexing
+- `alcove search` CLI command with `--scope global` and `--mode` options
+- `alcove index` CLI command to build/rebuild search index
+- `rebuild_index` MCP tool for AI agent integration
+- Cross-project global search via `scope: "global"`
+- Copilot CLI as 10th supported agent (`~/.copilot/mcp-config.json`)
+- Skill installation for Cline (`~/.cline/skills/alcove`) and Codex CLI (`~/.codex/skills/alcove`)
+- Auto-create `docs_root` directory at `~/.config/alcove/docs` on first setup
+- Incremental index rebuild — skips unchanged files based on mtime
+
+### Fixed
+
+- Antigravity MCP config path: `~/.antigravity/settings.json` → `~/.gemini/antigravity/mcp_config.json`
+- Cline and Codex CLI skill directories were not installed during setup
+- Uninstall now cleans Cline, Codex, and Copilot skill directories
+
+### Changed
+
+- Bump dependencies: console 0.16, dialoguer 0.12, thiserror 2
+- Simplify README mermaid diagram (collapse agents/tools, remove Index subgraph)
+- Clarify README wording: "read" → "read and manage", "read-only" → "scoped access"
+- Increase test coverage from 152 to 216 tests
+- Apply clippy suggestions for idiomatic Rust
+
 ## [0.6.0] — 2026-03-07
 
 ### Added

@@ -110,11 +110,10 @@ fn main() -> Result<()> {
 fn serve() -> Result<()> {
     // Background index build on server start
     std::thread::spawn(|| {
-        if let Some(docs_root) = config::load_config().docs_root() {
-            if docs_root.is_dir() {
+        if let Some(docs_root) = config::load_config().docs_root()
+            && docs_root.is_dir() {
                 let _ = index::build_index(&docs_root);
             }
-        }
     });
 
     let stdin = io::stdin();
