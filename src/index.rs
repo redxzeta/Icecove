@@ -231,10 +231,6 @@ pub fn build_index_unlocked(docs_root: &Path) -> Result<JsonValue> {
     build_index_inner(docs_root)
 }
 
-/// Check if index build is currently in progress.
-pub fn is_index_building() -> bool {
-    INDEX_BUILDING.load(Ordering::SeqCst)
-}
 
 fn build_index_inner(docs_root: &Path) -> Result<JsonValue> {
     let dir = index_dir(docs_root);
@@ -801,6 +797,67 @@ mod tests {
         let files: Vec<&str> = matches.iter().filter_map(|m| m["file"].as_str()).collect();
         let unique_files: std::collections::HashSet<&&str> = files.iter().collect();
         assert_eq!(files.len(), unique_files.len(), "results should be deduplicated by file");
+    }
+
+    #[test]
+    fn sanitize_query_preserves_unicode() {
+        assert_eq!(sanitize_query("인증 흐름"), "인증 흐름");
+        assert_eq!(sanitize_query("認証フロー"), "認証フロー");
+    }
+
+    #[test]
+    fn sanitize_query_mixed_special_and_text() {
+        assert_eq!(sanitize_query("user@name"), "user@name");
+        assert_eq!(sanitize_query("[RFC-001]"), "\\[RFC\\-001\\]");
+        assert_eq!(sanitize_query("feat!: breaking"), "feat\\!\\: breaking");
+    }
+
+    #[test]
+    fn search_indexed_no_index_returns_error() {
+        let tmp = TempDir::new().unwrap();
+        fs::create_dir_all(tmp.path().join("proj")).unwrap();
+        fs::write(tmp.path().join("proj/DOC.md"), "# Doc").unwrap();
+        // No index built — should error
+        let result = search_indexed(tmp.path(), "doc", 10, None);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn search_indexed_global_scope_label() {
+        let tmp = setup_indexed_root();
+        build_index_unlocked(tmp.path()).unwrap();
+        let result = search_indexed(tmp.path(), "OAuth", 10, None).unwrap();
+        assert_eq!(result["scope"], "global");
+        assert_eq!(result["mode"], "ranked");
+    }
+
+    #[test]
+    fn search_indexed_project_scope_label() {
+        let tmp = setup_indexed_root();
+        build_index_unlocked(tmp.path()).unwrap();
+        let result = search_indexed(tmp.path(), "OAuth", 10, Some("backend")).unwrap();
+        assert_eq!(result["scope"], "project");
+    }
+
+    #[test]
+    fn build_index_incremental_rebuilds_after_change() {
+        let tmp = setup_indexed_root();
+        build_index_unlocked(tmp.path()).unwrap();
+
+        // Add new file
+        fs::write(tmp.path().join("backend/NEW.md"), "# New Document\n\nFresh content here.").unwrap();
+        let r2 = build_index_unlocked(tmp.path()).unwrap();
+        assert_eq!(r2["status"], "ok");
+        // The new file should be picked up (indexed >= 1)
+        assert!(r2["indexed"].as_u64().unwrap_or(0) >= 1, "incremental rebuild should index new file");
+    }
+
+    #[test]
+    fn chunk_content_single_line() {
+        let chunks = chunk_content("Single line document.");
+        assert_eq!(chunks.len(), 1);
+        assert_eq!(chunks[0].line_start, 1);
+        assert_eq!(chunks[0].text, "Single line document.");
     }
 
     #[test]

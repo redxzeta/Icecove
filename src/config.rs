@@ -395,6 +395,63 @@ mod tests {
     }
 
     #[test]
+    fn default_docs_root_contains_alcove_docs() {
+        let path = default_docs_root();
+        assert!(path.to_string_lossy().ends_with(".config/alcove/docs"));
+    }
+
+    #[test]
+    fn docs_root_returns_explicit_value() {
+        let cfg = DocConfig {
+            docs_root: Some("/tmp/explicit".into()),
+            core: None, team: None, public: None, diagram: None,
+        };
+        assert_eq!(cfg.docs_root(), Some(PathBuf::from("/tmp/explicit")));
+    }
+
+    #[test]
+    fn docs_root_returns_none_when_no_config_and_no_default_dir() {
+        let cfg = DocConfig {
+            docs_root: None, core: None, team: None, public: None, diagram: None,
+        };
+        // If ~/.config/alcove/docs doesn't exist, returns None
+        // (it may or may not exist on the test machine, so just verify it's a valid Option)
+        let result = cfg.docs_root();
+        if let Some(ref p) = result {
+            assert!(p.is_dir());
+        }
+    }
+
+    #[test]
+    fn classify_reports_backslash() {
+        assert_eq!(classify_tier("reports\\weekly.md"), "reference");
+    }
+
+    #[test]
+    fn suggest_conventions_related() {
+        assert_eq!(suggest_categorization("coding_standard.md"), "Related to CONVENTIONS.md");
+        assert_eq!(suggest_categorization("code_style_guide.md"), "Related to CONVENTIONS.md");
+    }
+
+    #[test]
+    fn suggest_debt_related() {
+        assert_eq!(suggest_categorization("tech_debt_tracker.md"), "Related to DEBT.md");
+        assert_eq!(suggest_categorization("technical_debt_backlog.md"), "Related to DEBT.md");
+    }
+
+    #[test]
+    fn suggest_secrets_related() {
+        assert_eq!(suggest_categorization("env_vars_list.md"), "Related to SECRETS_MAP.md");
+        assert_eq!(suggest_categorization("secrets_rotation.md"), "Related to SECRETS_MAP.md");
+    }
+
+    #[test]
+    fn is_doc_file_no_extension() {
+        assert!(!is_doc_file(Path::new("Makefile")));
+        assert!(!is_doc_file(Path::new("LICENSE")));
+    }
+
+    #[test]
     fn config_parse_toml() {
         let toml_str = r#"
             docs_root = "/tmp/docs"

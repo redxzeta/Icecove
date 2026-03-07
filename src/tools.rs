@@ -188,8 +188,6 @@ pub fn tool_overview(project_root: &Path, project_name: &str, detected_via: &str
 #[derive(Debug, Deserialize)]
 struct SearchArgs {
     query: String,
-    #[serde(default)]
-    scope: Option<String>,
     #[serde(default = "default_search_limit")]
     limit: usize,
 }
@@ -1845,5 +1843,59 @@ mod tests {
         let result = tool_search_global(tmp.path(), args).unwrap();
         let matches = result["matches"].as_array().unwrap();
         assert!(matches.len() >= 3, "case-insensitive should find OAuth matches");
+    }
+
+    // -- audit: cross-repo duplicate detection --
+
+    #[test]
+    fn audit_detects_internal_docs_in_repo() {
+        let tmp = setup_docs_root();
+        let project_root = tmp.path().join("testproj");
+        let repo = TempDir::new().unwrap();
+        // Put an internal doc (PRD.md) in the project repo — this is a warning
+        fs::write(repo.path().join("PRD.md"), "# PRD exposed publicly").unwrap();
+        fs::write(repo.path().join("README.md"), "# README").unwrap();
+
+        let result = tool_audit(&project_root, "testproj", Some(repo.path())).unwrap();
+        let actions = result["suggested_actions"].as_array().unwrap();
+        let has_exposed_warning = actions.iter().any(|a| a["action"] == "resolve_exposed_internal_docs");
+        assert!(has_exposed_warning, "should warn about internal docs in project repo");
+    }
+
+    #[test]
+    fn audit_without_repo_shows_not_detected() {
+        let tmp = setup_docs_root();
+        let project_root = tmp.path().join("testproj");
+        let result = tool_audit(&project_root, "testproj", None).unwrap();
+        assert_eq!(result["project_repo"]["status"], "not_detected");
+    }
+
+    // -- search: repo docs/ subdirectory --
+
+    #[test]
+    fn search_includes_repo_docs_subdir() {
+        let tmp = setup_docs_root();
+        let project_root = tmp.path().join("testproj");
+        let repo = TempDir::new().unwrap();
+        let docs_dir = repo.path().join("docs");
+        fs::create_dir_all(&docs_dir).unwrap();
+        fs::write(docs_dir.join("guide.md"), "# Guide\n\nUnique marker zxcvbn.").unwrap();
+
+        let args = json!({"query": "zxcvbn"});
+        let result = tool_search(&project_root, args, Some(repo.path())).unwrap();
+        let matches = result["matches"].as_array().unwrap();
+        assert!(matches.iter().any(|m| m["source"] == "project-repo" && m["file"].as_str().unwrap().contains("guide")),
+            "should find file in repo's docs/ subdirectory");
+    }
+
+    // -- tool_search_global: empty query --
+
+    #[test]
+    fn global_search_empty_query() {
+        let tmp = setup_multi_project_root();
+        let args = json!({"query": ""});
+        let result = tool_search_global(tmp.path(), args).unwrap();
+        let matches = result["matches"].as_array().unwrap();
+        assert!(!matches.is_empty(), "empty query should match all lines");
     }
 }
