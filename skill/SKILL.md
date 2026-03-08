@@ -1,28 +1,11 @@
 ---
 name: alcove
 description: >
-  Access private project documentation stored in Alcove.
-  Use when the user asks about project design, architecture, requirements,
-  progress, conventions, technical debt, or environment configuration.
-  Also use to initialize docs for a new project.
-  Also use when the user asks to organize, clean up, or audit project documentation.
-triggers:
-  - project design
-  - architecture
-  - requirements
-  - progress
-  - conventions
-  - technical debt
-  - environment config
-  - initialize docs
-  - organize docs
-  - clean up docs
-  - audit docs
-  - document cleanup
-  - search all projects
-  - find across projects
-  - knowledge base
-  - previously saved notes
+  Reads and manages private project documentation stored in a separate Alcove docs repository.
+  Covers project design, architecture, requirements, progress tracking, coding conventions,
+  technical debt, secrets mapping, and environment configuration.
+  Also initializes, organizes, audits, and validates project documentation.
+  Activates whenever the request involves project documentation — regardless of input language.
 ---
 
 # Alcove
@@ -100,7 +83,6 @@ Case-insensitive keyword search across project docs. Use for:
 - User says "all projects", "everywhere", "across projects"
 - User references previously saved notes, knowledge, or past decisions
 - User wants to compare how different projects handle the same topic
-- User asks in Korean: "전체", "모든 프로젝트", "다른 프로젝트에서는"
 
 **When to use ranked mode:**
 - Large doc sets where grep returns too many results
@@ -185,27 +167,27 @@ When the user asks to organize, clean up, or audit documentation:
 
 | Direction | Allowed | Example |
 |-----------|---------|---------|
-| alcove → project repo | Generate **public-facing** docs derived from internal content | PRD 기반으로 README 생성 |
-| project repo → alcove | Restructure/incorporate reference materials into internal docs | API 스펙 분석 → ARCHITECTURE.md 보강 |
-| Raw internal → project repo | **NEVER** | PRD.md를 project repo에 복사 금지 |
+| alcove → project repo | Generate **public-facing** docs derived from internal content | Generate README from PRD |
+| project repo → alcove | Restructure/incorporate reference materials into internal docs | Analyze API spec → enhance ARCHITECTURE.md |
+| Raw internal → project repo | **NEVER** | Never copy PRD.md into the project repo |
 
 #### Action handling
 
-- **`resolve_exposed_internal_docs`**: Project repo에 내부 문서(PRD, ARCHITECTURE 등)가 있으면:
-  1. alcove 버전과 diff 비교
-  2. project repo 버전에 추가 내용이 있으면 alcove에 먼저 병합
-  3. 사용자 확인 후 project repo에서 제거
+- **`resolve_exposed_internal_docs`**: If internal docs (PRD, ARCHITECTURE, etc.) exist in the project repo:
+  1. Diff against the alcove version
+  2. Merge any additional content from the project repo version into alcove first
+  3. Remove from the project repo only after user confirmation
 
-- **`move_reports_to_doc_repo`**: 분석/벤치마크/감사 보고서는 alcove `reports/`로 이동.
+- **`move_reports_to_doc_repo`**: Move analysis/benchmark/audit reports to alcove `reports/`.
 
-- **`incorporate_to_doc_repo`**: Project repo의 참고 자료를 alcove 내부 문서로 재구조화.
+- **`incorporate_to_doc_repo`**: Restructure project repo reference materials into alcove internal docs.
 
-- **`generate_public_docs`**: Project repo에 없는 공개 문서를 내부 문서 기반으로 생성. 내부 정보 노출 금지.
+- **`generate_public_docs`**: Generate missing public docs from internal docs. Never expose internal information.
 
-- **`create_missing_internal`**: 누락된 필수 내부 문서를 `init_project`로 생성.
+- **`create_missing_internal`**: Create missing required internal docs via `init_project`.
 
-4. 모든 파일 이동/삭제 전 **반드시 사용자 확인**을 받을 것.
-5. 완료 후 `audit_project`를 다시 실행하여 정리 결과를 확인.
+4. **Always confirm with the user** before moving or deleting any file.
+5. Re-run `audit_project` after cleanup to verify results.
 
 ### Before writing code
 
