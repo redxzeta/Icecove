@@ -86,10 +86,15 @@ Alcove keeps all your private docs in **one shared repository**, organized by pr
 ## Quick start
 
 ```bash
-# Recommended: install pre-built binary (fast, no compilation)
+# Option 1: Homebrew (macOS)
+brew tap epicsagas/alcove
+brew install alcove
+
+# Option 2: Pre-built binary via cargo-binstall (fast, no compilation)
+cargo install cargo-binstall
 cargo binstall alcove
 
-# Alternative: install from source
+# Option 3: Build from source
 cargo install alcove
 
 alcove setup
@@ -300,7 +305,10 @@ ALCOVE_LANG=ko alcove setup
 ## Update
 
 ```bash
-# Recommended
+# Homebrew
+brew upgrade alcove
+
+# cargo-binstall
 cargo binstall alcove
 
 # From source
