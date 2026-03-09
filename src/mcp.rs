@@ -271,6 +271,24 @@ fn handle_tools_list(id: Option<Value>) -> RpcResponse {
                 "required": []
             }),
         },
+        ToolDescription {
+            name: "check_doc_changes".into(),
+            description: concat!(
+                "Check which documentation files have been added, modified, or deleted ",
+                "since the last index build. Compares current file timestamps against ",
+                "the index metadata. Optionally triggers an index rebuild if changes are detected."
+            ).into(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "auto_rebuild": {
+                        "type": "boolean",
+                        "description": "Automatically rebuild the index if changes are detected (default: false)"
+                    }
+                },
+                "required": []
+            }),
+        },
     ];
 
     RpcResponse::ok(id, json!({ "tools": tools }))
@@ -323,6 +341,12 @@ fn handle_tool_call(id: Option<Value>, params: Value) -> RpcResponse {
     }
     if call.name == "rebuild_index" {
         return match crate::index::build_index(&docs_root) {
+            Ok(v) => RpcResponse::ok(id, mcp_text_result(&v)),
+            Err(e) => RpcResponse::err(id, -32002, format!("Tool `{}` failed: {e}", call.name)),
+        };
+    }
+    if call.name == "check_doc_changes" {
+        return match tools::tool_check_doc_changes(&docs_root, call.arguments) {
             Ok(v) => RpcResponse::ok(id, mcp_text_result(&v)),
             Err(e) => RpcResponse::err(id, -32002, format!("Tool `{}` failed: {e}", call.name)),
         };
@@ -542,6 +566,7 @@ mod tests {
         assert!(names.contains(&"audit_project"));
         assert!(names.contains(&"init_project"));
         assert!(names.contains(&"rebuild_index"));
+        assert!(names.contains(&"check_doc_changes"));
     }
 
     #[test]
@@ -1021,5 +1046,53 @@ mod tests {
             !text.contains("score"),
             "forced grep should not have scores: {text}"
         );
+    }
+
+    #[test]
+    fn dispatch_check_doc_changes() {
+        let tmp = tempfile::tempdir().unwrap();
+        let proj = tmp.path().join("changeproj");
+        std::fs::create_dir_all(&proj).unwrap();
+        std::fs::write(proj.join("PRD.md"), "# PRD\n\nChange detection test.").unwrap();
+
+        unsafe { std::env::set_var("DOCS_ROOT", tmp.path().as_os_str()) };
+        let req = make_req(
+            "tools/call",
+            json!({"name": "check_doc_changes", "arguments": {}}),
+        );
+        let resp = dispatch(req).unwrap();
+        unsafe { std::env::remove_var("DOCS_ROOT") };
+
+        assert!(resp.error.is_none(), "check_doc_changes should succeed");
+        let text = resp.result.unwrap()["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        // No index exists, so all files are "added"
+        assert!(text.contains("added"), "should report added files");
+        assert!(text.contains("PRD.md"), "should list PRD.md");
+    }
+
+    #[test]
+    fn dispatch_check_doc_changes_with_auto_rebuild() {
+        let tmp = tempfile::tempdir().unwrap();
+        let proj = tmp.path().join("rebuildproj");
+        std::fs::create_dir_all(&proj).unwrap();
+        std::fs::write(proj.join("DOC.md"), "# Doc\n\nAuto rebuild test.").unwrap();
+
+        unsafe { std::env::set_var("DOCS_ROOT", tmp.path().as_os_str()) };
+        let req = make_req(
+            "tools/call",
+            json!({"name": "check_doc_changes", "arguments": {"auto_rebuild": true}}),
+        );
+        let resp = dispatch(req).unwrap();
+        unsafe { std::env::remove_var("DOCS_ROOT") };
+
+        assert!(resp.error.is_none(), "auto_rebuild should succeed");
+        let text = resp.result.unwrap()["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        assert!(text.contains("rebuild"), "should contain rebuild result");
     }
 }

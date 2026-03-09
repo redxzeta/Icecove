@@ -150,6 +150,76 @@ fn file_mtime_secs(path: &Path) -> u64 {
         .unwrap_or(0)
 }
 
+/// Check if a search index exists for the given docs_root.
+pub fn index_exists(docs_root: &Path) -> bool {
+    meta_path(docs_root).exists()
+}
+
+/// Return detailed change report: added, modified, deleted files since last index build.
+pub fn check_doc_changes(docs_root: &Path) -> Result<JsonValue> {
+    let meta = IndexMeta::load(docs_root);
+    let has_index = meta_path(docs_root).exists();
+
+    let mut added: Vec<String> = Vec::new();
+    let mut modified: Vec<String> = Vec::new();
+    let mut unchanged: u64 = 0;
+    let mut current_files: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+    for entry in std::fs::read_dir(docs_root).into_iter().flatten().flatten() {
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+        let name = path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
+        if name.starts_with('.') || name.starts_with('_') || name == "mcp" || name == "skills" {
+            continue;
+        }
+        for walk_entry in WalkDir::new(&path)
+            .into_iter()
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_type().is_file() && is_doc_file(e.path()))
+        {
+            let file_path = walk_entry.path();
+            let rel = file_path
+                .strip_prefix(docs_root)
+                .unwrap_or(file_path)
+                .to_string_lossy()
+                .to_string();
+            let mtime = file_mtime_secs(file_path);
+            current_files.insert(rel.clone());
+
+            match meta.files.get(&rel) {
+                None => added.push(rel),
+                Some(&recorded) if recorded != mtime => modified.push(rel),
+                _ => unchanged += 1,
+            }
+        }
+    }
+
+    let deleted: Vec<String> = meta
+        .files
+        .keys()
+        .filter(|k| !current_files.contains(*k))
+        .cloned()
+        .collect();
+
+    let is_stale = !added.is_empty() || !modified.is_empty() || !deleted.is_empty();
+
+    Ok(json!({
+        "index_exists": has_index,
+        "is_stale": is_stale,
+        "added": added,
+        "modified": modified,
+        "deleted": deleted,
+        "unchanged_count": unchanged,
+        "total_indexed": meta.files.len(),
+    }))
+}
+
 /// Check if the index is stale (any doc file newer than the index meta, or deleted).
 pub fn is_index_stale(docs_root: &Path) -> bool {
     let meta_file = meta_path(docs_root);
@@ -977,5 +1047,92 @@ mod tests {
                 .is_ok()
         );
         flag.store(false, Ordering::SeqCst);
+    }
+
+    #[test]
+    fn index_exists_false_when_no_index() {
+        let tmp = TempDir::new().unwrap();
+        assert!(!index_exists(tmp.path()));
+    }
+
+    #[test]
+    fn index_exists_true_after_build() {
+        let tmp = setup_indexed_root();
+        build_index_unlocked(tmp.path()).unwrap();
+        assert!(index_exists(tmp.path()));
+    }
+
+    #[test]
+    fn check_doc_changes_no_index() {
+        let tmp = setup_indexed_root();
+        let result = check_doc_changes(tmp.path()).unwrap();
+        assert!(!result["index_exists"].as_bool().unwrap());
+        assert!(result["is_stale"].as_bool().unwrap());
+        // All files should be "added" since no index exists
+        assert!(!result["added"].as_array().unwrap().is_empty());
+        assert!(result["modified"].as_array().unwrap().is_empty());
+        assert!(result["deleted"].as_array().unwrap().is_empty());
+    }
+
+    #[test]
+    fn check_doc_changes_fresh_index() {
+        let tmp = setup_indexed_root();
+        build_index_unlocked(tmp.path()).unwrap();
+        let result = check_doc_changes(tmp.path()).unwrap();
+        assert!(result["index_exists"].as_bool().unwrap());
+        assert!(!result["is_stale"].as_bool().unwrap());
+        assert!(result["added"].as_array().unwrap().is_empty());
+        assert!(result["modified"].as_array().unwrap().is_empty());
+        assert!(result["deleted"].as_array().unwrap().is_empty());
+        assert!(result["unchanged_count"].as_u64().unwrap() >= 5);
+    }
+
+    #[test]
+    fn check_doc_changes_after_add() {
+        let tmp = setup_indexed_root();
+        build_index_unlocked(tmp.path()).unwrap();
+        fs::write(tmp.path().join("backend/NEW.md"), "# New").unwrap();
+        let result = check_doc_changes(tmp.path()).unwrap();
+        assert!(result["is_stale"].as_bool().unwrap());
+        let added: Vec<&str> = result["added"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|v| v.as_str())
+            .collect();
+        assert!(added.iter().any(|a| a.contains("NEW.md")));
+    }
+
+    #[test]
+    fn check_doc_changes_after_delete() {
+        let tmp = setup_indexed_root();
+        build_index_unlocked(tmp.path()).unwrap();
+        fs::remove_file(tmp.path().join("backend/PRD.md")).unwrap();
+        let result = check_doc_changes(tmp.path()).unwrap();
+        assert!(result["is_stale"].as_bool().unwrap());
+        let deleted: Vec<&str> = result["deleted"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|v| v.as_str())
+            .collect();
+        assert!(deleted.iter().any(|d| d.contains("PRD.md")));
+    }
+
+    #[test]
+    fn check_doc_changes_after_modify() {
+        let tmp = setup_indexed_root();
+        build_index_unlocked(tmp.path()).unwrap();
+        std::thread::sleep(std::time::Duration::from_secs(1));
+        fs::write(tmp.path().join("backend/PRD.md"), "# Updated PRD").unwrap();
+        let result = check_doc_changes(tmp.path()).unwrap();
+        assert!(result["is_stale"].as_bool().unwrap());
+        let modified: Vec<&str> = result["modified"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|v| v.as_str())
+            .collect();
+        assert!(modified.iter().any(|m| m.contains("PRD.md")));
     }
 }

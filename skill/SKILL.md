@@ -112,6 +112,15 @@ Audit docs across both alcove and the project repository. Returns:
 
 Use to organize documentation or before `init_project` to understand gaps.
 
+### `check_doc_changes`
+
+Detect document changes since the last index build. Reports added, modified, and deleted files. Useful for keeping the search index fresh and monitoring documentation drift.
+
+**Parameters:**
+- `auto_rebuild` (optional) — if `true` and changes are detected, automatically rebuilds the index (default: false)
+
+**Returns:** `index_exists`, `is_stale`, `added`, `modified`, `deleted`, `unchanged_count`, `total_indexed`
+
 ### `rebuild_index`
 
 Build or rebuild the BM25 full-text search index. Required for `mode: "ranked"` search. Index is automatically built after `init_project`, but run this manually after bulk document changes.

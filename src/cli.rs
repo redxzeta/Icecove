@@ -15,13 +15,13 @@ use crate::config::{
 // Agent definitions
 // ---------------------------------------------------------------------------
 
-struct AgentDef {
-    name: &'static str,
-    mcp_config: McpConfig,
-    skill_dir: Option<&'static str>,
+pub(crate) struct AgentDef {
+    pub(crate) name: &'static str,
+    pub(crate) mcp_config: McpConfig,
+    pub(crate) skill_dir: Option<&'static str>,
 }
 
-enum McpConfig {
+pub(crate) enum McpConfig {
     /// Standard JSON: { "<key>": { "alcove": { "command": "...", "env": {...} } } }
     Json {
         path: &'static str,
@@ -37,7 +37,7 @@ fn home() -> PathBuf {
     dirs::home_dir().expect("Cannot determine home directory")
 }
 
-fn agents() -> Vec<AgentDef> {
+pub(crate) fn agents() -> Vec<AgentDef> {
     vec![
         AgentDef {
             name: "Claude Code",
@@ -120,7 +120,7 @@ fn agents() -> Vec<AgentDef> {
     ]
 }
 
-fn expand_path(p: &str) -> PathBuf {
+pub(crate) fn expand_path(p: &str) -> PathBuf {
     if let Some(stripped) = p.strip_prefix("~/") {
         home().join(stripped)
     } else {
@@ -967,6 +967,247 @@ fn run_grep_search(
             }
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// alcove doctor
+// ---------------------------------------------------------------------------
+
+pub fn cmd_doctor(format: &str) -> Result<()> {
+    let mut checks: Vec<serde_json::Value> = Vec::new();
+
+    // 1. Config file
+    let cfg_path = config_path();
+    let (cfg_status, cfg_msg) = if cfg_path.exists() {
+        match fs::read_to_string(&cfg_path) {
+            Ok(content) => match toml::from_str::<toml::Value>(&content) {
+                Ok(_) => ("ok", t!("doctor.config_valid", path = cfg_path.display()).to_string()),
+                Err(e) => ("error", t!("doctor.config_parse_error", error = e).to_string()),
+            },
+            Err(e) => ("error", t!("doctor.config_read_error", error = e).to_string()),
+        }
+    } else {
+        ("warn", t!("doctor.config_not_found").to_string())
+    };
+    checks.push(serde_json::json!({
+        "check": "config",
+        "status": cfg_status,
+        "message": cfg_msg,
+    }));
+
+    // 2. docs_root
+    let docs_root = saved_docs_root();
+    let (dr_status, dr_msg, dr_path) = match &docs_root {
+        Some(p) if p.is_dir() => ("ok", format!("{}", p.display()), Some(p.clone())),
+        Some(p) => (
+            "error",
+            t!("doctor.docs_root_not_exists", path = p.display()).to_string(),
+            None,
+        ),
+        None => ("error", t!("doctor.docs_root_missing").to_string(), None),
+    };
+    checks.push(serde_json::json!({
+        "check": "docs_root",
+        "status": dr_status,
+        "message": dr_msg,
+    }));
+
+    // 3. Projects
+    let mut project_names: Vec<String> = Vec::new();
+    if let Some(root) = &dr_path {
+        if let Ok(entries) = fs::read_dir(root) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if !path.is_dir() {
+                    continue;
+                }
+                let name = path
+                    .file_name()
+                    .unwrap_or_default()
+                    .to_string_lossy()
+                    .to_string();
+                if !name.starts_with('.') && !name.starts_with('_') && name != "mcp" && name != "skills" {
+                    project_names.push(name);
+                }
+            }
+        }
+        project_names.sort();
+    }
+    let proj_status = if project_names.is_empty() {
+        "warn"
+    } else {
+        "ok"
+    };
+    checks.push(serde_json::json!({
+        "check": "projects",
+        "status": proj_status,
+        "message": t!("doctor.projects_count", count = project_names.len()).to_string(),
+        "details": project_names,
+    }));
+
+    // 4. Agent registration
+    let mut agent_details: Vec<serde_json::Value> = Vec::new();
+    for agent in agents() {
+        let (status, msg) = check_agent_registration(&agent);
+        agent_details.push(serde_json::json!({
+            "name": agent.name,
+            "status": status,
+            "message": msg,
+        }));
+    }
+    let registered = agent_details
+        .iter()
+        .filter(|a| a["status"] == "ok")
+        .count();
+    let agent_status = if registered > 0 { "ok" } else { "warn" };
+    checks.push(serde_json::json!({
+        "check": "agents",
+        "status": agent_status,
+        "message": t!("doctor.agents_count", registered = registered, total = agent_details.len()).to_string(),
+        "details": agent_details,
+    }));
+
+    // 5. Search index
+    let (idx_status, idx_msg) = if let Some(root) = &dr_path {
+        if crate::index::index_exists(root) {
+            if crate::index::is_index_stale(root) {
+                ("warn", t!("doctor.index_stale").to_string())
+            } else {
+                ("ok", t!("doctor.index_fresh").to_string())
+            }
+        } else {
+            ("warn", t!("doctor.index_none").to_string())
+        }
+    } else {
+        ("error", t!("doctor.index_no_root").to_string())
+    };
+    checks.push(serde_json::json!({
+        "check": "index",
+        "status": idx_status,
+        "message": idx_msg,
+    }));
+
+    // 6. Binary
+    let bin_path = std::env::current_exe()
+        .map(|p| p.display().to_string())
+        .unwrap_or_else(|_| "unknown".to_string());
+    checks.push(serde_json::json!({
+        "check": "binary",
+        "status": "ok",
+        "message": bin_path,
+    }));
+
+    // Output
+    if format == "json" {
+        println!("{}", serde_json::to_string_pretty(&checks)?);
+    } else {
+        print_doctor_human(&checks);
+    }
+
+    Ok(())
+}
+
+fn check_agent_registration(agent: &AgentDef) -> (&'static str, String) {
+    let path = match &agent.mcp_config {
+        McpConfig::Json { path, .. } => *path,
+        McpConfig::OpenCode { path } => *path,
+        McpConfig::Codex { path } => *path,
+    };
+    let expanded = expand_path(path);
+
+    if !expanded.exists() {
+        return ("skip", t!("doctor.agent_config_not_found", path = path).to_string());
+    }
+
+    let content = match fs::read_to_string(&expanded) {
+        Ok(c) => c,
+        Err(_) => return ("error", t!("doctor.agent_cannot_read", path = path).to_string()),
+    };
+
+    let has_alcove = match &agent.mcp_config {
+        McpConfig::Json { server_key, .. } => {
+            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&content) {
+                parsed
+                    .get(*server_key)
+                    .and_then(|s| s.get("alcove"))
+                    .is_some()
+            } else {
+                false
+            }
+        }
+        McpConfig::OpenCode { .. } => {
+            if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(&content) {
+                parsed
+                    .get("mcp")
+                    .and_then(|m| m.get("alcove"))
+                    .is_some()
+            } else {
+                false
+            }
+        }
+        McpConfig::Codex { .. } => content.contains("[mcp_servers.alcove]"),
+    };
+
+    if has_alcove {
+        ("ok", t!("doctor.agent_registered").to_string())
+    } else {
+        ("error", t!("doctor.agent_not_registered", path = path).to_string())
+    }
+}
+
+fn print_doctor_human(checks: &[serde_json::Value]) {
+    println!();
+    println!("{}", style(t!("doctor.title").to_string()).bold());
+    println!();
+
+    for check in checks {
+        let name = check["check"].as_str().unwrap_or("");
+        let status = check["status"].as_str().unwrap_or("");
+        let msg = check["message"].as_str().unwrap_or("");
+
+        let icon = match status {
+            "ok" => style("  ✅").green(),
+            "warn" => style("  ⚠️ ").yellow(),
+            "error" => style("  ❌").red(),
+            "skip" => style("  ⏭️ ").dim(),
+            _ => style("  ?").dim(),
+        };
+
+        let label_key = format!("doctor.{name}");
+        let label_translated = t!(&label_key);
+        let label = label_translated.as_ref();
+
+        println!("{icon} {}: {msg}", style(label).bold());
+
+        // Show details for projects and agents
+        if name == "projects"
+            && let Some(details) = check["details"].as_array()
+        {
+            for d in details {
+                if let Some(s) = d.as_str() {
+                    println!("       {}", style(s).dim());
+                }
+            }
+        }
+        if name == "agents"
+            && let Some(details) = check["details"].as_array()
+        {
+            for d in details {
+                let aname = d["name"].as_str().unwrap_or("");
+                let astatus = d["status"].as_str().unwrap_or("");
+                let amsg = d["message"].as_str().unwrap_or("");
+                let aicon = match astatus {
+                    "ok" => style("✅").green(),
+                    "error" => style("❌").red(),
+                    "skip" => style("⏭️ ").dim(),
+                    _ => style("?").dim(),
+                };
+                println!("       {aicon} {aname}: {}", style(amsg).dim());
+            }
+        }
+    }
+
+    println!();
 }
 
 // ---------------------------------------------------------------------------

@@ -63,6 +63,12 @@ enum Commands {
     },
     /// Build or rebuild the full-text search index for ranked search
     Index,
+    /// Check the health of the alcove installation
+    Doctor {
+        /// Output format: human (default) or json
+        #[arg(long, default_value = "human")]
+        format: String,
+    },
     /// Search across project docs from the command line
     Search {
         /// Search query
@@ -99,6 +105,7 @@ fn main() -> Result<()> {
         Some(Commands::Uninstall) => cli::cmd_uninstall(),
         Some(Commands::Validate { format, exit_code }) => cli::cmd_validate(&format, exit_code),
         Some(Commands::Index) => cli::cmd_index(),
+        Some(Commands::Doctor { format }) => cli::cmd_doctor(&format),
         Some(Commands::Search {
             query,
             scope,

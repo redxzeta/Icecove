@@ -96,6 +96,26 @@ fn detect_repo_path(project_name: &str) -> Option<PathBuf> {
 }
 
 // ---------------------------------------------------------------------------
+// Tool: check_doc_changes
+// ---------------------------------------------------------------------------
+
+pub fn tool_check_doc_changes(docs_root: &Path, args: Value) -> Result<Value> {
+    let mut result = crate::index::check_doc_changes(docs_root)?;
+
+    let auto_rebuild = args
+        .get("auto_rebuild")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
+    if auto_rebuild && result["is_stale"].as_bool().unwrap_or(false) {
+        let rebuild_result = crate::index::build_index(docs_root)?;
+        result["rebuild"] = rebuild_result;
+    }
+
+    Ok(result)
+}
+
+// ---------------------------------------------------------------------------
 // Tool: get_project_docs_overview
 // ---------------------------------------------------------------------------
 
