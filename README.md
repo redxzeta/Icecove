@@ -2,7 +2,8 @@
   <img src="alcove.png" alt="Alcove" width="100%" />
 </p>
 
-<p align="center"><strong>Your AI agent doesn't know your project. Alcove fixes that.</strong></p>
+<p align="center"><strong>AI coding agents don't know your project.<br>
+Alcove gives them on-demand access to your private docs.</strong></p>
 
 <p align="center">
   <a href="README.md">English</a> ·
@@ -88,17 +89,17 @@ Alcove doesn't inject your docs. **Agents search for what they need, when they n
 ## Quick start
 
 ```bash
-# Option 1: Homebrew (macOS)
+# macOS
 brew install epicsagas/alcove/alcove
 
-# Option 2: Pre-built binary via cargo-binstall (fast, no compilation)
+# Linux / Windows — pre-built binary (fast, no compilation)
 cargo install cargo-binstall
 cargo binstall alcove
 
-# Option 3: Build from source
+# Any platform — build from source
 cargo install alcove
 
-# Option 4: Clone and build
+# Clone and build
 git clone https://github.com/epicsagas/alcove.git
 cd alcove
 make install
@@ -153,7 +154,7 @@ Your docs are organized in a separate directory (`DOCS_ROOT`), one folder per pr
 ## What it does
 
 - **On-demand doc retrieval** — agents search and retrieve; nothing is pre-loaded into context
-- **BM25 ranked search** — powered by [tantivy](https://github.com/quickwit-oss/tantivy); most relevant docs first, auto-indexed, falls back to grep
+- **BM25 ranked search** — fast full-text search powered by [tantivy](https://github.com/quickwit-oss/tantivy); most relevant docs first, auto-indexed, falls back to grep
 - **One doc-repo, multiple projects** — private docs organized by project, managed in a single place
 - **One setup, any agent** — configure once, every MCP-compatible agent gets the same access
 - **Auto-detects your project** from CWD — no per-project config needed
@@ -183,8 +184,9 @@ Your docs are organized in a separate directory (`DOCS_ROOT`), one folder per pr
 ```
 alcove              Start MCP server (agents call this)
 alcove setup        Interactive setup — re-run anytime to reconfigure
+alcove doctor       Check the health of your alcove installation
 alcove validate     Validate docs against policy (--format json, --exit-code)
-alcove index        Build or rebuild the search index
+alcove index        Build or rebuild the full-text search index for ranked search
 alcove search       Search docs from the terminal
 alcove uninstall    Remove skills, config, and legacy files
 ```
@@ -362,6 +364,10 @@ cargo install alcove
 alcove uninstall          # remove skills & config
 cargo uninstall alcove    # remove binary
 ```
+
+## Contributing
+
+Bug reports, feature requests, and pull requests are welcome. Please open an issue on [GitHub](https://github.com/epicsagas/alcove/issues) to start a discussion.
 
 ## License
 
