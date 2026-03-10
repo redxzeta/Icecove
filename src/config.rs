@@ -90,6 +90,24 @@ fn default_diagram_format() -> String {
     "mermaid".into()
 }
 
+fn default_index_buffer_mb() -> usize {
+    15
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct IndexConfig {
+    #[serde(default = "default_index_buffer_mb")]
+    pub buffer_size_mb: usize,
+}
+
+impl Default for IndexConfig {
+    fn default() -> Self {
+        Self {
+            buffer_size_mb: default_index_buffer_mb(),
+        }
+    }
+}
+
 #[derive(Debug, Deserialize, Clone)]
 pub struct DocConfig {
     #[serde(default)]
@@ -102,6 +120,8 @@ pub struct DocConfig {
     pub public: Option<CategoryConfig>,
     #[serde(default)]
     pub diagram: Option<DiagramConfig>,
+    #[serde(default)]
+    pub index: Option<IndexConfig>,
 }
 
 impl DocConfig {
@@ -149,6 +169,13 @@ impl DocConfig {
         }
         None
     }
+
+    pub fn index_buffer_bytes(&self) -> usize {
+        self.index
+            .as_ref()
+            .map_or_else(default_index_buffer_mb, |i| i.buffer_size_mb)
+            * 1_000_000
+    }
 }
 
 /// Default docs root: `~/.config/alcove/docs`
@@ -184,6 +211,7 @@ pub fn load_config() -> &'static DocConfig {
             team: None,
             public: None,
             diagram: None,
+            index: None,
         }
     })
 }
@@ -437,6 +465,7 @@ mod tests {
             team: None,
             public: None,
             diagram: None,
+            index: None,
         };
         assert_eq!(cfg.core_files().len(), DOC_REPO_REQUIRED.len());
         assert_eq!(cfg.team_files().len(), DOC_REPO_SUPPLEMENTARY.len());
@@ -454,6 +483,7 @@ mod tests {
             team: None,
             public: None,
             diagram: None,
+            index: None,
         };
         assert_eq!(cfg.core_files(), vec!["CUSTOM.md", "OTHER.md"]);
         assert_eq!(cfg.team_files().len(), DOC_REPO_SUPPLEMENTARY.len());
@@ -473,6 +503,7 @@ mod tests {
             team: None,
             public: None,
             diagram: None,
+            index: None,
         };
         assert_eq!(cfg.docs_root(), Some(PathBuf::from("/tmp/explicit")));
     }
@@ -485,6 +516,7 @@ mod tests {
             team: None,
             public: None,
             diagram: None,
+            index: None,
         };
         // If ~/.config/alcove/docs doesn't exist, returns None
         // (it may or may not exist on the test machine, so just verify it's a valid Option)

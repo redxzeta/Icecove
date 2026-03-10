@@ -257,7 +257,13 @@ fn search_dir_for_query(
         if !is_doc_file(path) {
             continue;
         }
-        let content = std::fs::read_to_string(path).unwrap_or_default();
+        let content = match std::fs::read_to_string(path) {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("[alcove] Failed to read {}: {}", path.display(), e);
+                continue;
+            }
+        };
         let rel = path
             .strip_prefix(base)
             .unwrap_or(path)
@@ -288,7 +294,15 @@ pub fn tool_search(
     let args: SearchArgs = serde_json::from_value(args_value)
         .context("search_project_docs requires { query, limit? }")?;
 
-    let query_lower = args.query.to_lowercase();
+    let query_trimmed = args.query.trim();
+    if query_trimmed.is_empty() {
+        return Ok(json!({ "query": args.query, "matches": [], "truncated": false, "error": "empty query" }));
+    }
+    if args.limit == 0 {
+        return Ok(json!({ "query": args.query, "matches": [], "truncated": false }));
+    }
+
+    let query_lower = query_trimmed.to_lowercase();
     let mut matches = Vec::new();
 
     // 1. Search alcove folder
@@ -311,7 +325,13 @@ pub fn tool_search(
             if !path.is_file() || !is_doc_file(&path) {
                 continue;
             }
-            let content = std::fs::read_to_string(&path).unwrap_or_default();
+            let content = match std::fs::read_to_string(&path) {
+                Ok(c) => c,
+                Err(e) => {
+                    eprintln!("[alcove] Failed to read {}: {}", path.display(), e);
+                    continue;
+                }
+            };
             let filename = path.file_name().and_then(|f| f.to_str()).unwrap_or("");
             for (idx, line) in content.lines().enumerate() {
                 if line.to_lowercase().contains(&query_lower) {
@@ -346,7 +366,15 @@ pub fn tool_search_global(docs_root: &Path, args_value: Value) -> Result<Value> 
     let args: SearchArgs = serde_json::from_value(args_value)
         .context("search_project_docs requires { query, scope?, limit? }")?;
 
-    let query_lower = args.query.to_lowercase();
+    let query_trimmed = args.query.trim();
+    if query_trimmed.is_empty() {
+        return Ok(json!({ "query": args.query, "matches": [], "truncated": false, "error": "empty query" }));
+    }
+    if args.limit == 0 {
+        return Ok(json!({ "query": args.query, "matches": [], "truncated": false }));
+    }
+
+    let query_lower = query_trimmed.to_lowercase();
     let mut matches = Vec::new();
 
     let entries = std::fs::read_dir(docs_root).context("Failed to read DOCS_ROOT directory")?;
@@ -377,7 +405,13 @@ pub fn tool_search_global(docs_root: &Path, args_value: Value) -> Result<Value> 
                 break;
             }
             let file_path = walk_entry.path();
-            let content = std::fs::read_to_string(file_path).unwrap_or_default();
+            let content = match std::fs::read_to_string(file_path) {
+                Ok(c) => c,
+                Err(e) => {
+                    eprintln!("[alcove] Failed to read {}: {}", file_path.display(), e);
+                    continue;
+                }
+            };
             let rel = file_path
                 .strip_prefix(&path)
                 .unwrap_or(file_path)
@@ -1666,12 +1700,9 @@ mod tests {
         let project_root = tmp.path().join("testproj");
         let args = json!({"query": ""});
         let result = tool_search(&project_root, args, None).unwrap();
-        // Empty query matches every line
         let matches = result["matches"].as_array().unwrap();
-        assert!(
-            !matches.is_empty(),
-            "empty query should match all non-empty lines"
-        );
+        assert!(matches.is_empty(), "empty query should return no matches");
+        assert_eq!(result["error"].as_str(), Some("empty query"));
     }
 
     // -- tool_get_file: read a .txt file --
@@ -2110,6 +2141,7 @@ mod tests {
         let args = json!({"query": ""});
         let result = tool_search_global(tmp.path(), args).unwrap();
         let matches = result["matches"].as_array().unwrap();
-        assert!(!matches.is_empty(), "empty query should match all lines");
+        assert!(matches.is_empty(), "empty query should return no matches");
+        assert_eq!(result["error"].as_str(), Some("empty query"));
     }
 }

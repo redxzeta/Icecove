@@ -1,5 +1,4 @@
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::SystemTime;
 
 use anyhow::{Context, Result};
@@ -8,16 +7,37 @@ use serde_json::{Value as JsonValue, json};
 use tantivy::collector::TopDocs;
 use tantivy::query::QueryParser;
 use tantivy::schema::{self, *};
+use tantivy::tokenizer::{LowerCaser, NgramTokenizer, TextAnalyzer};
 use tantivy::{Index, IndexWriter, ReloadPolicy, TantivyDocument};
 use walkdir::WalkDir;
 
-use crate::config::is_doc_file;
+use crate::config::{is_doc_file, load_config};
+
+const NGRAM_TOKENIZER: &str = "cjk_ngram";
 
 // ---------------------------------------------------------------------------
-// Index lock — prevents concurrent build/search races
+// Index lock — prevents concurrent build/search races per docs_root
 // ---------------------------------------------------------------------------
 
-static INDEX_BUILDING: AtomicBool = AtomicBool::new(false);
+fn lock_file(docs_root: &Path) -> PathBuf {
+    docs_root.join(".alcove").join(".index_lock")
+}
+
+fn try_acquire_lock(docs_root: &Path) -> bool {
+    let lock_path = lock_file(docs_root);
+    if let Some(parent) = lock_path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    std::fs::File::create_new(&lock_path).is_ok()
+}
+
+fn release_lock(docs_root: &Path) {
+    let _ = std::fs::remove_file(lock_file(docs_root));
+}
+
+fn is_locked(docs_root: &Path) -> bool {
+    lock_file(docs_root).exists()
+}
 
 // ---------------------------------------------------------------------------
 // Index directory
@@ -40,9 +60,25 @@ fn build_schema() -> (Schema, Field, Field, Field, Field, Field) {
     let project = builder.add_text_field("project", STRING | STORED);
     let file = builder.add_text_field("file", STRING | STORED);
     let chunk_id = builder.add_u64_field("chunk_id", INDEXED | STORED);
-    let body = builder.add_text_field("body", TEXT | STORED);
+    let body_indexing = TextFieldIndexing::default()
+        .set_tokenizer(NGRAM_TOKENIZER)
+        .set_index_option(IndexRecordOption::WithFreqsAndPositions);
+    let body_options = TextOptions::default()
+        .set_indexing_options(body_indexing)
+        .set_stored();
+    let body = builder.add_text_field("body", body_options);
     let line_start = builder.add_u64_field("line_start", STORED);
     (builder.build(), project, file, chunk_id, body, line_start)
+}
+
+fn register_ngram_tokenizer(index: &Index) -> Result<()> {
+    let ngram = TextAnalyzer::builder(NgramTokenizer::new(2, 3, false).map_err(|e| {
+        anyhow::anyhow!("Failed to create NgramTokenizer: {}", e)
+    })?)
+    .filter(LowerCaser)
+    .build();
+    index.tokenizers().register(NGRAM_TOKENIZER, ngram);
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -69,19 +105,18 @@ fn chunk_content(content: &str) -> Vec<Chunk> {
     let mut chunk_start_line = 0;
 
     for (i, line) in lines.iter().enumerate() {
-        let line_len = line.chars().count() + 1; // +1 for newline
+        let line_len = line.chars().count().saturating_add(1);
         if current_chars + line_len > CHUNK_SIZE && !chunk_lines.is_empty() {
             chunks.push(Chunk {
                 text: chunk_lines.join("\n"),
-                line_start: chunk_start_line + 1, // 1-indexed
+                line_start: chunk_start_line + 1,
             });
 
-            // Overlap: keep last few lines
             let overlap_chars = CHUNK_OVERLAP;
-            let mut kept = 0;
+            let mut kept: usize = 0;
             let mut keep_from = chunk_lines.len();
             for (j, cl) in chunk_lines.iter().enumerate().rev() {
-                kept += cl.chars().count() + 1;
+                kept = kept.saturating_add(cl.chars().count().saturating_add(1));
                 if kept >= overlap_chars {
                     keep_from = j;
                     break;
@@ -92,12 +127,12 @@ fn chunk_content(content: &str) -> Vec<Chunk> {
             chunk_lines = overlap_lines;
             current_chars = chunk_lines
                 .iter()
-                .map(|l: &String| l.chars().count() + 1)
+                .map(|l: &String| l.chars().count().saturating_add(1))
                 .sum();
         }
 
         chunk_lines.push(line.to_string());
-        current_chars += line_len;
+        current_chars = current_chars.saturating_add(line_len);
     }
 
     if !chunk_lines.is_empty() {
@@ -116,7 +151,7 @@ fn chunk_content(content: &str) -> Vec<Chunk> {
 
 #[derive(Debug, Serialize, Deserialize, Default)]
 struct IndexMeta {
-    files: std::collections::HashMap<String, u64>, // path -> mtime_secs
+    files: std::collections::HashMap<String, [u64; 2]>, // path -> [mtime_secs, size]
 }
 
 impl IndexMeta {
@@ -139,15 +174,20 @@ impl IndexMeta {
     }
 }
 
-fn file_mtime_secs(path: &Path) -> u64 {
-    std::fs::metadata(path)
-        .and_then(|m| m.modified())
-        .and_then(|t| {
-            t.duration_since(SystemTime::UNIX_EPOCH)
-                .map_err(std::io::Error::other)
-        })
-        .map(|d| d.as_secs())
-        .unwrap_or(0)
+fn file_fingerprint(path: &Path) -> [u64; 2] {
+    match std::fs::metadata(path) {
+        Ok(m) => {
+            let mtime_secs = m
+                .modified()
+                .ok()
+                .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+            let size = m.len();
+            [mtime_secs, size]
+        }
+        Err(_) => [0, 0],
+    }
 }
 
 /// Check if a search index exists for the given docs_root.
@@ -189,12 +229,12 @@ pub fn check_doc_changes(docs_root: &Path) -> Result<JsonValue> {
                 .unwrap_or(file_path)
                 .to_string_lossy()
                 .to_string();
-            let mtime = file_mtime_secs(file_path);
+            let fp = file_fingerprint(file_path);
             current_files.insert(rel.clone());
 
             match meta.files.get(&rel) {
                 None => added.push(rel),
-                Some(&recorded) if recorded != mtime => modified.push(rel),
+                Some(&recorded) if recorded != fp => modified.push(rel),
                 _ => unchanged += 1,
             }
         }
@@ -259,11 +299,11 @@ pub fn is_index_stale(docs_root: &Path) -> bool {
                 .unwrap_or(file_path)
                 .to_string_lossy()
                 .to_string();
-            let mtime = file_mtime_secs(file_path);
+            let fp = file_fingerprint(file_path);
             current_files.insert(rel.clone());
             match meta.files.get(&rel) {
-                Some(&recorded) if recorded == mtime => {}
-                _ => return true, // New file or changed mtime
+                Some(&recorded) if recorded == fp => {}
+                _ => return true,
             }
         }
     }
@@ -293,26 +333,18 @@ pub fn ensure_index_fresh(docs_root: &Path) -> bool {
 // Build / rebuild index
 // ---------------------------------------------------------------------------
 
-/// Build or incrementally update the search index for all projects.
-/// Uses an atomic flag to prevent concurrent builds.
 pub fn build_index(docs_root: &Path) -> Result<JsonValue> {
-    // Acquire build lock (non-blocking: if already building, skip)
-    if INDEX_BUILDING
-        .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-        .is_err()
-    {
+    if !try_acquire_lock(docs_root) {
         return Ok(json!({
             "status": "skipped",
             "reason": "Index build already in progress",
         }));
     }
-    // Ensure we release the lock even on error
     let result = build_index_inner(docs_root);
-    INDEX_BUILDING.store(false, Ordering::SeqCst);
+    release_lock(docs_root);
     result
 }
 
-/// Inner build function without locking (used in tests to avoid global lock contention).
 #[cfg(test)]
 pub fn build_index_unlocked(docs_root: &Path) -> Result<JsonValue> {
     build_index_inner(docs_root)
@@ -331,7 +363,7 @@ fn build_index_inner(docs_root: &Path) -> Result<JsonValue> {
     let mut project_count = 0u64;
 
     // Determine which files changed
-    let mut current_files: std::collections::HashMap<String, u64> =
+    let mut current_files: std::collections::HashMap<String, [u64; 2]> =
         std::collections::HashMap::new();
     let mut files_to_index: Vec<(String, String, PathBuf)> = Vec::new(); // (project, rel_path, full_path)
 
@@ -364,8 +396,8 @@ fn build_index_inner(docs_root: &Path) -> Result<JsonValue> {
                 .unwrap_or(&file_path)
                 .to_string_lossy()
                 .to_string();
-            let mtime = file_mtime_secs(&file_path);
-            current_files.insert(rel.clone(), mtime);
+            let fp = file_fingerprint(&file_path);
+            current_files.insert(rel.clone(), fp);
 
             let rel_to_project = file_path
                 .strip_prefix(&path)
@@ -373,7 +405,7 @@ fn build_index_inner(docs_root: &Path) -> Result<JsonValue> {
                 .to_string_lossy()
                 .to_string();
 
-            if meta.files.get(&rel).copied() == Some(mtime) {
+            if meta.files.get(&rel).copied() == Some(fp) {
                 skipped_count += 1;
             } else {
                 files_to_index.push((name.clone(), rel_to_project, file_path));
@@ -396,9 +428,10 @@ fn build_index_inner(docs_root: &Path) -> Result<JsonValue> {
                 Index::create_in_dir(&dir, schema.clone())
             })
             .context("Failed to create search index")?;
+        register_ngram_tokenizer(&index)?;
 
         let mut writer: IndexWriter = index
-            .writer(15_000_000)
+            .writer(load_config().index_buffer_bytes())
             .context("Failed to create index writer")?;
 
         // Index all files
@@ -422,7 +455,13 @@ fn build_index_inner(docs_root: &Path) -> Result<JsonValue> {
                 .filter(|e| e.file_type().is_file() && is_doc_file(e.path()))
             {
                 let file_path = walk_entry.path();
-                let content = std::fs::read_to_string(file_path).unwrap_or_default();
+                let content = match std::fs::read_to_string(file_path) {
+                    Ok(c) => c,
+                    Err(e) => {
+                        eprintln!("[alcove] Failed to read {}: {}", file_path.display(), e);
+                        continue;
+                    }
+                };
                 let rel = file_path
                     .strip_prefix(&path)
                     .unwrap_or(file_path)
@@ -446,14 +485,21 @@ fn build_index_inner(docs_root: &Path) -> Result<JsonValue> {
     } else if !files_to_index.is_empty() {
         // Incremental update
         let index = Index::open_in_dir(&dir).context("Failed to open existing index")?;
-        let mut writer: IndexWriter = index.writer(15_000_000)?;
+        register_ngram_tokenizer(&index)?;
+        let mut writer: IndexWriter = index.writer(load_config().index_buffer_bytes())?;
 
         for (project_name, rel_path, file_path) in &files_to_index {
             // Delete old documents for this file
             let term = tantivy::Term::from_field_text(file_field, rel_path);
             writer.delete_term(term);
 
-            let content = std::fs::read_to_string(file_path).unwrap_or_default();
+            let content = match std::fs::read_to_string(file_path) {
+                Ok(c) => c,
+                Err(e) => {
+                    eprintln!("[alcove] Failed to read {}: {}", file_path.display(), e);
+                    continue;
+                }
+            };
             for (chunk_idx, chunk) in chunk_content(&content).iter().enumerate() {
                 let mut doc = TantivyDocument::new();
                 doc.add_text(project_field, project_name);
@@ -526,9 +572,8 @@ pub fn search_indexed(
         anyhow::bail!("Search index not found. Run index rebuild first.");
     }
 
-    // Wait briefly if index is being built (up to 5 seconds)
     for _ in 0..50 {
-        if !INDEX_BUILDING.load(Ordering::SeqCst) {
+        if !is_locked(docs_root) {
             break;
         }
         std::thread::sleep(std::time::Duration::from_millis(100));
@@ -549,6 +594,7 @@ pub fn search_indexed(
         build_schema();
 
     let index = Index::open_in_dir(&dir).context("Failed to open search index")?;
+    register_ngram_tokenizer(&index)?;
 
     let reader = index
         .reader_builder()
@@ -1026,27 +1072,21 @@ mod tests {
 
     #[test]
     fn build_index_lock_prevents_concurrent() {
-        // Verify the AtomicBool compare_exchange logic works correctly
-        let flag = AtomicBool::new(false);
-
-        // First acquire succeeds
-        assert!(
-            flag.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-                .is_ok()
-        );
-        // Second acquire fails (simulating concurrent call)
-        assert!(
-            flag.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-                .is_err()
-        );
-        // Release
-        flag.store(false, Ordering::SeqCst);
-        // Now acquire succeeds again
-        assert!(
-            flag.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-                .is_ok()
-        );
-        flag.store(false, Ordering::SeqCst);
+        let tmp = TempDir::new().unwrap();
+        let lock_path = lock_file(tmp.path());
+        
+        assert!(!is_locked(tmp.path()));
+        
+        assert!(try_acquire_lock(tmp.path()));
+        assert!(is_locked(tmp.path()));
+        
+        assert!(!try_acquire_lock(tmp.path()));
+        
+        release_lock(tmp.path());
+        assert!(!is_locked(tmp.path()));
+        
+        assert!(try_acquire_lock(tmp.path()));
+        release_lock(tmp.path());
     }
 
     #[test]
@@ -1134,5 +1174,56 @@ mod tests {
             .filter_map(|v| v.as_str())
             .collect();
         assert!(modified.iter().any(|m| m.contains("PRD.md")));
+    }
+
+    #[test]
+    fn search_indexed_korean() {
+        let tmp = TempDir::new().unwrap();
+        let proj = tmp.path().join("korean");
+        fs::create_dir_all(&proj).unwrap();
+        fs::write(
+            proj.join("PRD.md"),
+            "# 제품 요구사항\n\n사용자 인증 기능이 필요합니다.\nOAuth 2.0을 사용하여 로그인을 구현합니다.",
+        )
+        .unwrap();
+
+        build_index_unlocked(tmp.path()).unwrap();
+        let result = search_indexed(tmp.path(), "인증", 10, None).unwrap();
+        let matches = result["matches"].as_array().unwrap();
+        assert!(!matches.is_empty(), "should find Korean text '인증'");
+    }
+
+    #[test]
+    fn search_indexed_japanese() {
+        let tmp = TempDir::new().unwrap();
+        let proj = tmp.path().join("japanese");
+        fs::create_dir_all(&proj).unwrap();
+        fs::write(
+            proj.join("PRD.md"),
+            "# 製品要件\n\nユーザー認証機能が必要です。\nOAuth 2.0を使用してログインを実装します。",
+        )
+        .unwrap();
+
+        build_index_unlocked(tmp.path()).unwrap();
+        let result = search_indexed(tmp.path(), "認証", 10, None).unwrap();
+        let matches = result["matches"].as_array().unwrap();
+        assert!(!matches.is_empty(), "should find Japanese text '認証'");
+    }
+
+    #[test]
+    fn search_indexed_chinese() {
+        let tmp = TempDir::new().unwrap();
+        let proj = tmp.path().join("chinese");
+        fs::create_dir_all(&proj).unwrap();
+        fs::write(
+            proj.join("PRD.md"),
+            "# 产品需求\n\n用户认证功能是必需的。\n使用OAuth 2.0实现登录。",
+        )
+        .unwrap();
+
+        build_index_unlocked(tmp.path()).unwrap();
+        let result = search_indexed(tmp.path(), "认证", 10, None).unwrap();
+        let matches = result["matches"].as_array().unwrap();
+        assert!(!matches.is_empty(), "should find Chinese text '认证'");
     }
 }
