@@ -2,7 +2,7 @@
   <img src="../alcove.png" alt="Alcove" width="100%" />
 </p>
 
-<p align="center">项目文档的安静之所。</p>
+<p align="center"><strong>你的 AI 代理不了解你的项目。Alcove 来解决。</strong></p>
 
 <p align="center">
   <a href="../README.md">English</a> ·
@@ -30,9 +30,19 @@ Alcove 让任何 AI 编码代理都能读取和管理您的私有项目文档—
 
 ## 问题所在
 
-您有不应放在公开 GitHub 仓库中的内部文档。但如果 AI 代理无法读取这些文档，就无法正确帮助您——它会凭空编造需求，忽略您已经记录的约束条件。
+你面临两个糟糕的选择。
 
-再乘以多个项目和多个代理，情况就更复杂了。每个代理的配置不同，每次切换都会丢失上下文。而且没有标准方法来组织或验证这些文档。
+**选择 A：将文档放入 `CLAUDE.md` / `AGENTS.md`**
+每次运行都会将所有文件注入上下文窗口。
+对于简短的规范还行，但面对真正的项目文档就会失效。
+10 个架构文件 = 上下文膨胀 = 更慢、更贵、更不准确的响应。
+
+**选择 B：不放入文档**
+代理会凭空编造你已经记录的需求。
+忽略你已经做出的决定中的约束。
+每次会话都要求你解释同样的事情。
+
+两种方案都无法扩展。乘以 5 个项目和 3 个代理，每个配置不同。每次切换，你都失去上下文。
 
 ## Alcove 如何解决这个问题
 
@@ -86,15 +96,20 @@ Alcove 将所有私有文档保存在**一个共享仓库**中，按项目组织
 ## 快速开始
 
 ```bash
-# 方式 1：Homebrew（macOS）
+# macOS
 brew install epicsagas/alcove/alcove
 
-# 方式 2：预构建二进制（cargo-binstall，无需编译）
+# Linux / Windows — 预构建二进制（快速，无需编译）
 cargo install cargo-binstall
 cargo binstall alcove
 
-# 方式 3：从源码构建
+# 任意平台 — 从源码构建
 cargo install alcove
+
+# 克隆并构建
+git clone https://github.com/epicsagas/alcove.git
+cd alcove
+make install
 
 alcove setup
 ```
@@ -107,14 +122,6 @@ alcove setup
 4. 要配置的 AI 代理（MCP + 技能文件）
 
 随时重新运行 `alcove setup` 来更改设置。它会记住您之前的选择。
-
-## 从源码安装
-
-```bash
-git clone https://github.com/epicsagas/alcove.git
-cd alcove
-make install
-```
 
 ## 工作原理
 
@@ -172,12 +179,14 @@ Alcove 将文档分为以下层级：
 | `init_project` | 为新项目创建文档框架（内部+外部文档，选择性文件创建） |
 | `validate_docs` | 根据团队策略（`policy.toml`）验证文档 |
 | `rebuild_index` | 重建全文搜索索引（通常自动完成） |
+| `check_doc_changes` | 检测自上次索引构建以来添加、修改或删除的文档 |
 
 ## CLI
 
 ```
 alcove              启动 MCP 服务器（代理调用）
 alcove setup        交互式设置——随时重新运行以重新配置
+alcove doctor       检查安装健康状态
 alcove validate     根据策略验证文档（--format json, --exit-code）
 alcove index        构建或重建搜索索引
 alcove search       从终端搜索文档
@@ -317,6 +326,10 @@ cargo install alcove
 alcove uninstall          # 移除技能和配置
 cargo uninstall alcove    # 移除二进制文件
 ```
+
+## 贡献
+
+欢迎提交错误报告、功能请求和拉取请求。请在 [GitHub](https://github.com/epicsagas/alcove/issues) 上开 Issue 开始讨论。
 
 ## 许可证
 

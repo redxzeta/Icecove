@@ -2,7 +2,7 @@
   <img src="../alcove.png" alt="Alcove" width="100%" />
 </p>
 
-<p align="center">Un lugar tranquilo para la documentación de tu proyecto.</p>
+<p align="center"><strong>Tu agente de IA no conoce tu proyecto. Alcove lo soluciona.</strong></p>
 
 <p align="center">
   <a href="../README.md">English</a> ·
@@ -30,9 +30,19 @@ Guarda PRDs, decisiones de arquitectura, mapas de secretos y runbooks internos e
 
 ## El problema
 
-Tienes documentos internos que no deberían estar en tu repositorio público de GitHub. Pero tu agente de IA no puede ayudarte correctamente si no puede leerlos — inventa requisitos e ignora restricciones que ya documentaste.
+Tienes dos malas opciones.
 
-Multiplica eso por varios proyectos y varios agentes. Cada uno tiene diferente configuración. Cada vez que cambias, pierdes el contexto. Y no hay una forma estándar de organizar o validar nada.
+**Opción A: Poner documentos en `CLAUDE.md` / `AGENTS.md`**
+Cada archivo se inyecta en la ventana de contexto en cada ejecución.
+Funciona para convenciones cortas. Se rompe con documentación real del proyecto.
+10 archivos de arquitectura = inflación de contexto = respuestas más lentas, costosas e imprecisas.
+
+**Opción B: No poner documentos**
+Tu agente inventa requisitos que ya documentaste.
+Ignora restricciones de decisiones que ya tomaste.
+Te pide que expliques las mismas cosas en cada sesión.
+
+Ninguna opción escala. Multiplícalo por 5 proyectos y 3 agentes, cada uno configurado diferente. Cada vez que cambias, pierdes el contexto.
 
 ## Cómo Alcove resuelve esto
 
@@ -86,15 +96,20 @@ Alcove mantiene toda tu documentación privada en **un único repositorio compar
 ## Inicio rápido
 
 ```bash
-# Opción 1: Homebrew (macOS)
+# macOS
 brew install epicsagas/alcove/alcove
 
-# Opción 2: Binario precompilado (cargo-binstall, sin compilación)
+# Linux / Windows — binario precompilado (rápido, sin compilación)
 cargo install cargo-binstall
 cargo binstall alcove
 
-# Opción 3: Desde el código fuente
+# Cualquier plataforma — compilar desde el código fuente
 cargo install alcove
+
+# Clonar y compilar
+git clone https://github.com/epicsagas/alcove.git
+cd alcove
+make install
 
 alcove setup
 ```
@@ -107,14 +122,6 @@ Eso es todo. `setup` te guía a través de todo de forma interactiva:
 4. Qué agentes de IA configurar (MCP + archivos de habilidades)
 
 Ejecuta `alcove setup` en cualquier momento para cambiar la configuración. Recuerda tus elecciones anteriores.
-
-## Instalar desde el código fuente
-
-```bash
-git clone https://github.com/epicsagas/alcove.git
-cd alcove
-make install
-```
 
 ## Cómo funciona
 
@@ -172,12 +179,14 @@ La herramienta `audit` escanea tanto el repositorio de documentos como el direct
 | `init_project` | Genera la estructura de documentos para un nuevo proyecto (documentos internos+externos, creación selectiva) |
 | `validate_docs` | Valida documentos contra la política del equipo (`policy.toml`) |
 | `rebuild_index` | Reconstruye el índice de búsqueda de texto completo (normalmente automático) |
+| `check_doc_changes` | Detecta documentos añadidos, modificados o eliminados desde la última indexación |
 
 ## CLI
 
 ```
 alcove              Iniciar el servidor MCP (los agentes lo invocan)
 alcove setup        Configuración interactiva — ejecuta en cualquier momento para reconfigurar
+alcove doctor       Verificar el estado de la instalación de Alcove
 alcove validate     Validar documentos contra la política (--format json, --exit-code)
 alcove index        Construir o reconstruir el índice de búsqueda
 alcove search       Buscar documentos desde la terminal
@@ -317,6 +326,10 @@ cargo install alcove
 alcove uninstall          # eliminar habilidades y configuración
 cargo uninstall alcove    # eliminar binario
 ```
+
+## Contribuir
+
+Se aceptan informes de errores, solicitudes de funciones y pull requests. Abre un issue en [GitHub](https://github.com/epicsagas/alcove/issues) para iniciar una discusión.
 
 ## Licencia
 

@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# Mock Claude Code agent for Alcove demo
+QUERY="$*"
+
+if echo "$QUERY" | grep -qi "audit\|check\|missing\|generat\|creat\|gap"; then
+  # ── Scene 4: validate + generate workflow ──────────────────────────────────
+  echo ""
+  printf "  \033[35m◆\033[0m Auditing project documentation…\n"
+  sleep 0.9
+  printf "  \033[2m↳ alcove  validate_docs()\033[0m\n"
+  sleep 1.2
+  printf "  \033[33m  WARN\033[0m  PRD.md \033[2m— missing\033[0m\n"
+  printf "  \033[32m  PASS\033[0m  ARCHITECTURE.md  \033[2m(## Overview ✓)\033[0m\n"
+  printf "  \033[32m  PASS\033[0m  DECISIONS.md\n"
+  echo ""
+  printf "  PRD.md is required but missing. Scaffolding from project context…\n"
+  sleep 0.8
+  printf "  \033[2m↳ alcove  search_project_docs(\"product goals requirements\")\033[0m\n"
+  sleep 0.9
+  printf "  \033[2m↳ alcove  init_project({ files: [\"PRD.md\"] })\033[0m\n"
+  sleep 1.0
+  printf "  \033[2m← PRD.md created\033[0m\n"
+  echo ""
+  printf "  \033[32m✓\033[0m PRD.md scaffolded. Open it to review and complete.\n"
+  echo ""
+else
+  # ── Scene 1: search workflow ───────────────────────────────────────────────
+  echo ""
+  printf "  \033[35m◆\033[0m Thinking about your question…\n"
+  sleep 0.9
+  printf "  \033[2m↳ alcove  search_project_docs(\"%s\")\033[0m\n" "${QUERY}"
+  sleep 1.1
+  printf "  \033[2m← ARCHITECTURE.md [0.94]  DECISIONS.md [0.71]\033[0m\n"
+  echo ""
+  printf "\033[1mmy-app\033[0m uses \033[36mJWT authentication\033[0m with rotating refresh tokens\n"
+  printf "stored in httpOnly cookies. \033[36mAuth0\033[0m handles OAuth2 social login.\n"
+  echo ""
+  printf "  \033[2mADR-001\033[0m  Stateless JWT — enables horizontal scaling\n"
+  printf "  \033[2mADR-002\033[0m  Auth0 delegation — avoids in-house OAuth maintenance\n"
+  echo ""
+fi

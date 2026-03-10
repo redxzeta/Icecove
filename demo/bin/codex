@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Mock Codex CLI agent for Alcove demo
+QUERY="$*"
+
+echo ""
+printf "  \033[32m○\033[0m Searching across all projects…\n"
+sleep 0.9
+printf "  \033[2m↳ alcove  search_project_docs(%s, scope=\"global\")\033[0m\n" "\"${QUERY}\""
+sleep 1.1
+printf "  \033[2m← my-app:  ARCHITECTURE.md  DECISIONS.md\033[0m\n"
+printf "  \033[2m← my-api:  ARCHITECTURE.md  DECISIONS.md\033[0m\n"
+echo ""
+printf "Two authentication patterns across your projects:\n"
+echo ""
+printf "  \033[1;36mmy-app\033[0m  →  JWT + Auth0    \033[2m(user-facing, stateless, ADR-001)\033[0m\n"
+printf "  \033[1;36mmy-api\033[0m  →  API keys only  \033[2m(M2M only, rotated 90d, ADR-001)\033[0m\n"
+echo ""

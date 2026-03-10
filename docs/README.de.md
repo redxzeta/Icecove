@@ -2,7 +2,7 @@
   <img src="../alcove.png" alt="Alcove" width="100%" />
 </p>
 
-<p align="center">Ein ruhiger Ort für deine Projektdokumentation.</p>
+<p align="center"><strong>Dein KI-Agent kennt dein Projekt nicht. Alcove ändert das.</strong></p>
 
 <p align="center">
   <a href="../README.md">English</a> ·
@@ -30,9 +30,19 @@ Speichere PRDs, Architekturentscheidungen, Secret-Maps und interne Runbooks an e
 
 ## Das Problem
 
-Du hast interne Dokumente, die nicht in deinem öffentlichen GitHub-Repository sein sollten. Aber dein KI-Agent kann dir nicht richtig helfen, wenn er sie nicht lesen kann — er erfindet Anforderungen und ignoriert Einschränkungen, die du bereits dokumentiert hast.
+Du hast zwei schlechte Optionen.
 
-Multipliziere das mit mehreren Projekten und mehreren Agenten. Jeder hat eine andere Konfiguration. Bei jedem Wechsel geht der Kontext verloren. Und es gibt keine standardisierte Methode, das alles zu organisieren oder zu validieren.
+**Option A: Docs in `CLAUDE.md` / `AGENTS.md` packen**
+Bei jeder Ausführung wird jede Datei in das Kontextfenster injiziert.
+Funktioniert für kurze Konventionen. Bricht bei echten Projektdokumenten zusammen.
+10 Architekturdateien = Kontext-Aufblähung = langsamere, teurere, ungenauere Antworten.
+
+**Option B: Keine Docs einfügen**
+Dein Agent erfindet Anforderungen, die du bereits dokumentiert hast.
+Er ignoriert Einschränkungen aus Entscheidungen, die du bereits getroffen hast.
+Er bittet dich jede Session, dieselben Dinge zu erklären.
+
+Keine Option skaliert. Multipliziere das mit 5 Projekten und 3 Agenten, jeder unterschiedlich konfiguriert. Jedes Mal wenn du wechselst, verlierst du den Kontext.
 
 ## Wie Alcove das löst
 
@@ -86,15 +96,20 @@ Alcove speichert alle deine privaten Dokumente in **einem gemeinsamen Repository
 ## Schnellstart
 
 ```bash
-# Option 1: Homebrew (macOS)
+# macOS
 brew install epicsagas/alcove/alcove
 
-# Option 2: Vorgefertigtes Binary (cargo-binstall, keine Kompilierung)
+# Linux / Windows — vorgefertigtes Binary (schnell, keine Kompilierung)
 cargo install cargo-binstall
 cargo binstall alcove
 
-# Option 3: Aus Quellcode
+# Beliebige Plattform — aus Quellcode
 cargo install alcove
+
+# Klonen und bauen
+git clone https://github.com/epicsagas/alcove.git
+cd alcove
+make install
 
 alcove setup
 ```
@@ -107,14 +122,6 @@ Das war's. `setup` führt dich interaktiv durch alles:
 4. Welche KI-Agenten konfiguriert werden sollen (MCP + Skill-Dateien)
 
 Führe `alcove setup` jederzeit erneut aus, um Einstellungen zu ändern. Es merkt sich deine vorherigen Auswahlen.
-
-## Aus Quellcode installieren
-
-```bash
-git clone https://github.com/epicsagas/alcove.git
-cd alcove
-make install
-```
 
 ## Funktionsweise
 
@@ -172,12 +179,14 @@ Das `audit`-Tool scannt sowohl das Docs-Repository als auch das lokale Projektve
 | `init_project` | Dokumente für ein neues Projekt scaffolden (interne+externe Dokumente, selektive Dateierstellung) |
 | `validate_docs` | Dokumente gegen Team-Policy (`policy.toml`) validieren |
 | `rebuild_index` | Volltextsuchindex neu aufbauen (normalerweise automatisch) |
+| `check_doc_changes` | Seit dem letzten Index-Build hinzugefügte, geänderte oder gelöschte Dokumente erkennen |
 
 ## CLI
 
 ```
 alcove              MCP-Server starten (Agenten rufen das auf)
 alcove setup        Interaktives Setup — jederzeit erneut ausführen
+alcove doctor       Gesundheit der Alcove-Installation prüfen
 alcove validate     Dokumente gegen Policy validieren (--format json, --exit-code)
 alcove index        Suchindex erstellen oder neu aufbauen
 alcove search       Dokumente vom Terminal aus suchen
@@ -317,6 +326,10 @@ cargo install alcove
 alcove uninstall          # Skills & Konfiguration entfernen
 cargo uninstall alcove    # Binary entfernen
 ```
+
+## Mitwirken
+
+Fehlerberichte, Funktionsanfragen und Pull Requests sind willkommen. Bitte öffne ein Issue auf [GitHub](https://github.com/epicsagas/alcove/issues), um eine Diskussion zu beginnen.
 
 ## Lizenz
 

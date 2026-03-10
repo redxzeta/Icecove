@@ -2,8 +2,7 @@
   <img src="alcove.png" alt="Alcove" width="100%" />
 </p>
 
-<p align="center"><strong>AI coding agents don't know your project.<br>
-Alcove gives them on-demand access to your private docs.</strong></p>
+<p align="center"><strong>Your AI agent doesn't know your project. Alcove fixes that.</strong></p>
 
 <p align="center">
   <a href="README.md">English</a> ·
@@ -29,8 +28,16 @@ Alcove is an MCP server that gives AI coding agents on-demand access to your pri
 
 ## Demo
 
-<!-- demo.gif -->
-> *`cd my-app` → ask agent → Alcove retrieves ranked docs → switch to `my-api` → same workflow, zero reconfiguration*
+![Alcove agent demo](demo-agent.gif)
+> *Claude, Gemini, Codex — search · switch projects · global search · validate & generate. One setup.*
+
+<details>
+<summary>CLI demo</summary>
+
+![Alcove CLI demo](demo.gif)
+> *`alcove search` · project switch · `--scope global` · `alcove validate`*
+
+</details>
 
 ## The problem
 
@@ -178,6 +185,7 @@ Your docs are organized in a separate directory (`DOCS_ROOT`), one folder per pr
 | `init_project` | Scaffold docs for a new project (internal + external docs, selective file creation) |
 | `validate_docs` | Validate docs against team policy (`policy.toml`) |
 | `rebuild_index` | Rebuild the full-text search index (usually automatic) |
+| `check_doc_changes` | Detect added, modified, or deleted docs since last index build |
 
 ## CLI
 

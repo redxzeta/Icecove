@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Mock Gemini CLI agent for Alcove demo
+QUERY="$*"
+
+echo ""
+printf "  \033[34m◇\033[0m Looking up project documentation…\n"
+sleep 0.9
+printf "  \033[2m↳ alcove  search_project_docs(%s)\033[0m\n" "\"${QUERY}\""
+sleep 1.1
+printf "  \033[2m← ARCHITECTURE.md [0.89]  DECISIONS.md [0.82]\033[0m\n"
+echo ""
+printf "\033[1mmy-api\033[0m uses \033[36mAPI key authentication\033[0m for machine-to-machine calls.\n"
+printf "No user-facing auth flows. Keys are SHA-256 hashed at rest\n"
+printf "and rotate every 90 days via CI pipeline.\n"
+echo ""
+printf "  \033[2mADR-001\033[0m  API keys over JWT — simpler for M2M, no token expiry logic\n"
+printf "  \033[2mADR-002\033[0m  No user auth — internal service only, reduces attack surface\n"
+echo ""

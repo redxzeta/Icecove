@@ -2,7 +2,7 @@
   <img src="../alcove.png" alt="Alcove" width="100%" />
 </p>
 
-<p align="center">Un endroit tranquille pour la documentation de votre projet.</p>
+<p align="center"><strong>Votre agent IA ne connaît pas votre projet. Alcove règle ça.</strong></p>
 
 <p align="center">
   <a href="../README.md">English</a> ·
@@ -30,9 +30,19 @@ Gardez les PRDs, décisions d'architecture, cartes de secrets et runbooks intern
 
 ## Le problème
 
-Vous avez des documents internes qui ne devraient pas être dans votre dépôt GitHub public. Mais votre agent IA ne peut pas vous aider correctement s'il ne peut pas les lire — il invente des exigences et ignore les contraintes que vous avez déjà documentées.
+Vous avez deux mauvaises options.
 
-Multipliez cela par plusieurs projets et plusieurs agents. Chacun a une configuration différente. À chaque changement, vous perdez le contexte. Et il n'y a pas de méthode standard pour organiser ou valider tout cela.
+**Option A : Mettre les docs dans `CLAUDE.md` / `AGENTS.md`**
+Chaque fichier est injecté dans la fenêtre de contexte à chaque exécution.
+Fonctionne pour les conventions courtes. Se brise avec la vraie documentation de projet.
+10 fichiers d'architecture = gonflement de contexte = réponses plus lentes, plus coûteuses, moins précises.
+
+**Option B : Ne pas mettre les docs**
+Votre agent invente des exigences que vous avez déjà documentées.
+Il ignore les contraintes des décisions que vous avez déjà prises.
+Il vous demande d'expliquer les mêmes choses à chaque session.
+
+Aucune option ne passe à l'échelle. Multipliez par 5 projets et 3 agents, chacun configuré différemment. Chaque fois que vous changez, vous perdez le contexte.
 
 ## Comment Alcove résout ce problème
 
@@ -86,15 +96,20 @@ Alcove conserve tous vos documents privés dans **un seul dépôt partagé**, or
 ## Démarrage rapide
 
 ```bash
-# Option 1 : Homebrew (macOS)
+# macOS
 brew install epicsagas/alcove/alcove
 
-# Option 2 : Binaire pré-compilé (cargo-binstall, sans compilation)
+# Linux / Windows — binaire pré-compilé (rapide, sans compilation)
 cargo install cargo-binstall
 cargo binstall alcove
 
-# Option 3 : Depuis les sources
+# Toute plateforme — compiler depuis les sources
 cargo install alcove
+
+# Cloner et compiler
+git clone https://github.com/epicsagas/alcove.git
+cd alcove
+make install
 
 alcove setup
 ```
@@ -107,14 +122,6 @@ C'est tout. `setup` vous guide à travers tout de manière interactive :
 4. Quels agents IA configurer (MCP + fichiers de compétences)
 
 Relancez `alcove setup` à tout moment pour modifier les paramètres. Il se souvient de vos choix précédents.
-
-## Installer depuis les sources
-
-```bash
-git clone https://github.com/epicsagas/alcove.git
-cd alcove
-make install
-```
 
 ## Fonctionnement
 
@@ -172,12 +179,14 @@ L'outil `audit` scanne le dépôt de documents et le répertoire local du projet
 | `init_project` | Créer la structure de documents pour un nouveau projet (documents internes+externes, création sélective) |
 | `validate_docs` | Valider les documents contre la politique d'équipe (`policy.toml`) |
 | `rebuild_index` | Reconstruire l'index de recherche plein texte (normalement automatique) |
+| `check_doc_changes` | Détecter les documents ajoutés, modifiés ou supprimés depuis le dernier index |
 
 ## CLI
 
 ```
 alcove              Démarrer le serveur MCP (les agents l'appellent)
 alcove setup        Configuration interactive — relancez à tout moment pour reconfigurer
+alcove doctor       Vérifier l'état de l'installation d'Alcove
 alcove validate     Valider les documents contre la politique (--format json, --exit-code)
 alcove index        Construire ou reconstruire l'index de recherche
 alcove search       Rechercher des documents depuis le terminal
@@ -317,6 +326,10 @@ cargo install alcove
 alcove uninstall          # supprimer compétences et configuration
 cargo uninstall alcove    # supprimer le binaire
 ```
+
+## Contribuer
+
+Les rapports de bugs, demandes de fonctionnalités et pull requests sont les bienvenus. Ouvrez un issue sur [GitHub](https://github.com/epicsagas/alcove/issues) pour démarrer une discussion.
 
 ## Licence
 

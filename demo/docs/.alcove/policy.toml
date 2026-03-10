@@ -1,0 +1,16 @@
+[policy]
+enforce = "warn"
+
+[[policy.required]]
+name = "PRD.md"
+aliases = ["prd.md", "product-requirements.md"]
+
+[[policy.required]]
+name = "ARCHITECTURE.md"
+
+  [[policy.required.sections]]
+  heading = "## Overview"
+  required = true
+
+[[policy.required]]
+name = "DECISIONS.md"
