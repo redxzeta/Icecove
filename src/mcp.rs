@@ -210,6 +210,45 @@ fn handle_tools_list(id: Option<Value>) -> RpcResponse {
             }),
         },
         ToolDescription {
+            name: "configure_project".into(),
+            description: concat!(
+                "Create or update per-project settings in alcove.toml. ",
+                "Each project can override global defaults for: diagram format, ",
+                "required core docs, team docs, and public docs. ",
+                "Only the fields you specify are changed; unmentioned settings are preserved. ",
+                "Run init_project first if the project does not yet exist."
+            ).into(),
+            input_schema: json!({
+                "type": "object",
+                "properties": {
+                    "project_name": {
+                        "type": "string",
+                        "description": "Name of the project to configure"
+                    },
+                    "diagram_format": {
+                        "type": "string",
+                        "description": "Diagram syntax to use in this project's docs (e.g. \"mermaid\", \"plantuml\")"
+                    },
+                    "core_files": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "Required internal docs for this project (overrides global core list)"
+                    },
+                    "team_files": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "Supplementary team docs recognized for this project"
+                    },
+                    "public_files": {
+                        "type": "array",
+                        "items": { "type": "string" },
+                        "description": "Public-facing docs recognized for this project"
+                    }
+                },
+                "required": ["project_name"]
+            }),
+        },
+        ToolDescription {
             name: "init_project".into(),
             description: concat!(
                 "Initialize documentation for a new project from alcove templates. ",
@@ -462,6 +501,13 @@ fn handle_tool_call(id: Option<Value>, params: Value) -> RpcResponse {
         "search_project_docs" => tools::tool_search(&project_root, call.arguments, repo_path),
         "get_doc_file" => tools::tool_get_file(&project_root, call.arguments),
         "audit_project" => tools::tool_audit(&project_root, &resolved.name, repo_path),
+        "configure_project" => {
+            let rp = repo_path
+                .map(|p| p.to_path_buf())
+                .or_else(|| std::env::current_dir().ok())
+                .unwrap_or_else(|| project_root.to_path_buf());
+            tools::tool_configure_project(&rp, call.arguments)
+        }
         "validate_docs" => {
             let source = crate::policy::policy_source(&docs_root, &resolved.name);
             let (pol, results) = crate::policy::validate(&docs_root, &resolved.name, repo_path);
@@ -564,6 +610,7 @@ mod tests {
         assert!(names.contains(&"list_projects"));
         assert!(names.contains(&"audit_project"));
         assert!(names.contains(&"init_project"));
+        assert!(names.contains(&"configure_project"));
         assert!(names.contains(&"rebuild_index"));
         assert!(names.contains(&"check_doc_changes"));
     }

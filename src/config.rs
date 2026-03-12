@@ -2,7 +2,7 @@ use std::env;
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 // ---------------------------------------------------------------------------
 // Document tier classification constants
@@ -74,13 +74,13 @@ pub const PROJECT_REPO_FILES: &[&str] = &[
 // Dynamic config from ~/.config/alcove/config.toml
 // ---------------------------------------------------------------------------
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct CategoryConfig {
     #[serde(default)]
     pub files: Vec<String>,
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DiagramConfig {
     #[serde(default = "default_diagram_format")]
     pub format: String,
@@ -94,7 +94,7 @@ fn default_index_buffer_mb() -> usize {
     15
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct IndexConfig {
     #[serde(default = "default_index_buffer_mb")]
     pub buffer_size_mb: usize,
@@ -108,23 +108,49 @@ impl Default for IndexConfig {
     }
 }
 
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DocConfig {
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub docs_root: Option<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub core: Option<CategoryConfig>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub team: Option<CategoryConfig>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub public: Option<CategoryConfig>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub diagram: Option<DiagramConfig>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub index: Option<IndexConfig>,
 }
 
+impl Default for DocConfig {
+    fn default() -> Self {
+        Self {
+            docs_root: None,
+            core: None,
+            team: None,
+            public: None,
+            diagram: None,
+            index: None,
+        }
+    }
+}
+
 impl DocConfig {
+    /// Return a new config where `self` values take precedence and `base` fills
+    /// any unset fields.  Used to layer project-level config over global config.
+    pub fn overlay(&self, base: &DocConfig) -> DocConfig {
+        DocConfig {
+            docs_root: self.docs_root.clone().or_else(|| base.docs_root.clone()),
+            core: self.core.clone().or_else(|| base.core.clone()),
+            team: self.team.clone().or_else(|| base.team.clone()),
+            public: self.public.clone().or_else(|| base.public.clone()),
+            diagram: self.diagram.clone().or_else(|| base.diagram.clone()),
+            index: self.index.clone().or_else(|| base.index.clone()),
+        }
+    }
+
     pub fn core_files(&self) -> Vec<String> {
         self.core.as_ref().map_or_else(
             || DOC_REPO_REQUIRED.iter().map(std::string::ToString::to_string).collect(),
@@ -216,14 +242,13 @@ pub fn load_config() -> &'static DocConfig {
     })
 }
 
-pub fn classify_tier(relative_path: &str) -> &'static str {
+/// Classify a doc file path using a provided config (enables project-level overrides).
+pub fn classify_tier_with(relative_path: &str, cfg: &DocConfig) -> &'static str {
     let filename = Path::new(relative_path)
         .file_name()
         .and_then(|f| f.to_str())
         .unwrap_or("");
     let lower = filename.to_lowercase();
-
-    let cfg = load_config();
 
     if cfg.core_files().iter().any(|f| f.to_lowercase() == lower) {
         "doc-repo-required"
@@ -236,6 +261,44 @@ pub fn classify_tier(relative_path: &str) -> &'static str {
     } else {
         "unrecognized"
     }
+}
+
+/// Classify using the global config.  Convenience wrapper around [`classify_tier_with`].
+#[allow(dead_code)]
+pub fn classify_tier(relative_path: &str) -> &'static str {
+    classify_tier_with(relative_path, load_config())
+}
+
+// ---------------------------------------------------------------------------
+// Project-level config: {project_repo}/alcove.toml
+// ---------------------------------------------------------------------------
+
+/// Path to the per-project config file inside the project repository.
+pub fn project_config_path(project_repo: &Path) -> PathBuf {
+    project_repo.join("alcove.toml")
+}
+
+/// Load per-project config from `{project_repo}/alcove.toml`.
+/// Returns an empty `DocConfig` if the file doesn't exist or cannot be parsed.
+pub fn load_project_config(project_repo: &Path) -> DocConfig {
+    let path = project_config_path(project_repo);
+    if path.exists()
+        && let Ok(content) = std::fs::read_to_string(&path)
+        && let Ok(cfg) = toml::from_str::<DocConfig>(&content)
+    {
+        return cfg;
+    }
+    DocConfig::default()
+}
+
+/// Return the effective config for a project.
+///
+/// Resolution order (highest priority first):
+/// 1. `{project_repo}/alcove.toml`  (project repository root)
+/// 2. `~/.config/alcove/config.toml` (global)
+/// 3. Built-in defaults
+pub fn effective_config(project_repo: &Path) -> DocConfig {
+    load_project_config(project_repo).overlay(load_config())
 }
 
 /// Categorization hint for unrecognized files in alcove.
@@ -586,5 +649,96 @@ mod tests {
         assert_eq!(cfg.docs_root, Some("/tmp/docs".into()));
         assert_eq!(cfg.core_files(), vec!["A.md", "B.md"]);
         assert_eq!(cfg.diagram_format(), "ascii");
+    }
+
+    // -- project-level config --
+
+    #[test]
+    fn overlay_project_overrides_base() {
+        let base = DocConfig {
+            diagram: Some(DiagramConfig { format: "mermaid".into() }),
+            core: Some(CategoryConfig { files: vec!["BASE.md".into()] }),
+            ..DocConfig::default()
+        };
+        let project = DocConfig {
+            diagram: Some(DiagramConfig { format: "plantuml".into() }),
+            ..DocConfig::default()
+        };
+        let merged = project.overlay(&base);
+        // project value wins
+        assert_eq!(merged.diagram_format(), "plantuml");
+        // base value fills unset field
+        assert_eq!(merged.core_files(), vec!["BASE.md"]);
+    }
+
+    #[test]
+    fn overlay_empty_project_uses_base() {
+        let base = DocConfig {
+            core: Some(CategoryConfig { files: vec!["PRD.md".into()] }),
+            diagram: Some(DiagramConfig { format: "ascii".into() }),
+            ..DocConfig::default()
+        };
+        let merged = DocConfig::default().overlay(&base);
+        assert_eq!(merged.core_files(), vec!["PRD.md"]);
+        assert_eq!(merged.diagram_format(), "ascii");
+    }
+
+    #[test]
+    fn classify_tier_with_custom_config() {
+        let cfg = DocConfig {
+            core: Some(CategoryConfig { files: vec!["CUSTOM.md".into()] }),
+            ..DocConfig::default()
+        };
+        assert_eq!(classify_tier_with("CUSTOM.md", &cfg), "doc-repo-required");
+        // A standard core file is NOT in custom list, so it's unrecognized
+        assert_eq!(classify_tier_with("PRD.md", &cfg), "unrecognized");
+    }
+
+    #[test]
+    fn load_project_config_missing_file_returns_default() {
+        let tmp = tempfile::tempdir().unwrap();
+        // No alcove.toml in tmp → returns defaults
+        let cfg = load_project_config(tmp.path());
+        assert_eq!(cfg.core_files().len(), DOC_REPO_REQUIRED.len());
+    }
+
+    #[test]
+    fn load_project_config_reads_toml() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(
+            tmp.path().join("alcove.toml"),
+            r#"[diagram]
+format = "plantuml"
+[core]
+files = ["SPEC.md", "DESIGN.md"]
+"#,
+        )
+        .unwrap();
+
+        let cfg = load_project_config(tmp.path());
+        assert_eq!(cfg.diagram_format(), "plantuml");
+        assert_eq!(cfg.core_files(), vec!["SPEC.md", "DESIGN.md"]);
+    }
+
+    #[test]
+    fn effective_config_project_overrides_are_applied() {
+        let tmp = tempfile::tempdir().unwrap();
+        std::fs::write(
+            tmp.path().join("alcove.toml"),
+            r#"[diagram]
+format = "plantuml"
+"#,
+        )
+        .unwrap();
+
+        let cfg = effective_config(tmp.path());
+        assert_eq!(cfg.diagram_format(), "plantuml");
+        assert_eq!(cfg.core_files().len(), DOC_REPO_REQUIRED.len());
+    }
+
+    #[test]
+    fn project_config_path_is_in_project_dir() {
+        let path = project_config_path(Path::new("/my/project"));
+        assert_eq!(path, PathBuf::from("/my/project/alcove.toml"));
     }
 }

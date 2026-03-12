@@ -204,5 +204,6 @@ $RECYCLE.BIN/
 # Windows shortcuts
 *.lnk
 
-# End of https://www.toptal.com/developers/gitignore/api/windows,macos,linux,dotenv,visualstudiocode,intellij+all,rust
+# End of https://www.toptal.com/developers/gitignore/api/windows,<D-s>macos,linux,dotenv,visualstudiocode,intellij+all,rust
 
+./alcove.toml

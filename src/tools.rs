@@ -6,7 +6,9 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use walkdir::WalkDir;
 
-use crate::config::{classify_tier, is_doc_file, load_config, suggest_categorization};
+use crate::config::{
+    classify_tier_with, effective_config, is_doc_file, load_config, suggest_categorization,
+};
 
 // ---------------------------------------------------------------------------
 // Project resolution
@@ -125,6 +127,10 @@ pub fn tool_overview(
     detected_via: &str,
     repo_path: Option<&Path>,
 ) -> Result<Value> {
+    let cfg = repo_path
+        .map(effective_config)
+        .unwrap_or_else(|| load_config().clone());
+
     let mut bridge_files = Vec::new();
 
     for entry in WalkDir::new(project_root)
@@ -147,7 +153,7 @@ pub fn tool_overview(
         bridge_files.push(json!({
             "path": rel,
             "size_bytes": meta.len(),
-            "tier": classify_tier(&rel),
+            "tier": classify_tier_with(&rel, &cfg),
         }));
     }
 
@@ -162,7 +168,7 @@ pub fn tool_overview(
                 repo_files.push(json!({
                     "path": filename,
                     "size_bytes": size,
-                    "tier": classify_tier(filename),
+                    "tier": classify_tier_with(filename, &cfg),
                 }));
             }
         }
@@ -186,7 +192,7 @@ pub fn tool_overview(
                 repo_files.push(json!({
                     "path": rel,
                     "size_bytes": size,
-                    "tier": classify_tier(&rel),
+                    "tier": classify_tier_with(&rel, &cfg),
                 }));
             }
         }
@@ -203,9 +209,9 @@ pub fn tool_overview(
             "files": bridge_files,
             "count": bridge_files.len(),
         },
-        "diagram_format": load_config().diagram_format(),
+        "diagram_format": cfg.diagram_format(),
         "hint": "Start with PRD.md (what/why), ARCHITECTURE.md (how), PROGRESS.md (status)",
-        "diagram_hint": format!("Use {} syntax when creating or updating diagrams in docs.", load_config().diagram_format()),
+        "diagram_hint": format!("Use {} syntax when creating or updating diagrams in docs.", cfg.diagram_format()),
     });
 
     if let Some(rp) = repo_path {
@@ -539,6 +545,61 @@ pub fn tool_list_projects(docs_root: &Path) -> Result<Value> {
 }
 
 // ---------------------------------------------------------------------------
+// Tool: configure_project
+// ---------------------------------------------------------------------------
+
+#[derive(Debug, Deserialize)]
+struct ConfigureProjectArgs {
+    project_name: String,
+    #[serde(default)]
+    diagram_format: Option<String>,
+    #[serde(default)]
+    core_files: Option<Vec<String>>,
+    #[serde(default)]
+    team_files: Option<Vec<String>>,
+    #[serde(default)]
+    public_files: Option<Vec<String>>,
+}
+
+/// Create or update `{repo_path}/alcove.toml` with the provided settings.
+/// `repo_path` is the project's repository root (CWD-detected or explicit).
+/// Existing settings not mentioned in the call are preserved.
+pub fn tool_configure_project(repo_path: &Path, args_value: Value) -> Result<Value> {
+    use crate::config::{CategoryConfig, DiagramConfig, load_project_config, project_config_path};
+
+    let args: ConfigureProjectArgs = serde_json::from_value(args_value)
+        .context("configure_project requires { project_name, ... }")?;
+
+    // Load existing project config (empty if none)
+    let mut cfg = load_project_config(repo_path);
+
+    // Apply updates for each provided field
+    if let Some(fmt) = args.diagram_format {
+        cfg.diagram = Some(DiagramConfig { format: fmt });
+    }
+    if let Some(files) = args.core_files {
+        cfg.core = Some(CategoryConfig { files });
+    }
+    if let Some(files) = args.team_files {
+        cfg.team = Some(CategoryConfig { files });
+    }
+    if let Some(files) = args.public_files {
+        cfg.public = Some(CategoryConfig { files });
+    }
+
+    // Serialize and write
+    let toml_str = toml::to_string_pretty(&cfg).context("Failed to serialize config")?;
+    let config_path = project_config_path(repo_path);
+    std::fs::write(&config_path, &toml_str).context("Failed to write alcove.toml")?;
+
+    Ok(json!({
+        "project_name": args.project_name,
+        "config_path": config_path.to_string_lossy(),
+        "written": toml_str,
+    }))
+}
+
+// ---------------------------------------------------------------------------
 // Tool: init_project
 // ---------------------------------------------------------------------------
 
@@ -804,7 +865,10 @@ pub fn tool_init_project(docs_root: &Path, args_value: Value) -> Result<Value> {
 // ---------------------------------------------------------------------------
 
 /// Scan a project repository (root + docs/) for documentation files.
-fn scan_repo_docs(repo_path: Option<&Path>) -> (Vec<Value>, String) {
+fn scan_repo_docs(
+    repo_path: Option<&Path>,
+    cfg: &crate::config::DocConfig,
+) -> (Vec<Value>, String) {
     let mut repo_docs = Vec::new();
     let mut repo_path_str = String::new();
 
@@ -820,7 +884,7 @@ fn scan_repo_docs(repo_path: Option<&Path>) -> (Vec<Value>, String) {
             let filename = path.file_name().and_then(|f| f.to_str()).unwrap_or("");
             let rel = filename.to_string();
             let size = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
-            let tier = classify_tier(&rel);
+            let tier = classify_tier_with(&rel, cfg);
             repo_docs.push(json!({
                 "path": rel,
                 "filename": filename,
@@ -848,7 +912,7 @@ fn scan_repo_docs(repo_path: Option<&Path>) -> (Vec<Value>, String) {
                 .to_string();
             let filename = path.file_name().and_then(|f| f.to_str()).unwrap_or("");
             let size = entry.metadata().ok().map(|m| m.len()).unwrap_or(0);
-            let tier = classify_tier(&rel);
+            let tier = classify_tier_with(&rel, cfg);
             repo_docs.push(json!({
                 "path": rel,
                 "filename": filename,
@@ -870,8 +934,12 @@ pub fn tool_audit(
     project_name: &str,
     repo_path: Option<&Path>,
 ) -> Result<Value> {
+    let cfg = repo_path
+        .map(effective_config)
+        .unwrap_or_else(|| load_config().clone());
+
     let mut tier1_status = Vec::new();
-    let core_files = load_config().core_files();
+    let core_files = cfg.core_files();
 
     for file in &core_files {
         let path = project_root.join(file);
@@ -937,7 +1005,7 @@ pub fn tool_audit(
         }
 
         let meta = entry.metadata()?;
-        let tier = classify_tier(&rel);
+        let tier = classify_tier_with(&rel, &cfg);
 
         match tier {
             "doc-repo-supplementary" | "project-repo" => {
@@ -958,7 +1026,7 @@ pub fn tool_audit(
     }
 
     // Scan project repository
-    let (repo_docs, repo_path_str) = scan_repo_docs(repo_path);
+    let (repo_docs, repo_path_str) = scan_repo_docs(repo_path, &cfg);
 
     let missing_files: Vec<String> = tier1_status
         .iter()
@@ -1043,7 +1111,7 @@ pub fn tool_audit(
             .filter_map(|d| d["filename"].as_str().map(String::from))
             .collect();
 
-        let public_files = load_config().public_files();
+        let public_files = cfg.public_files();
         let missing_public: Vec<&str> = public_files
             .iter()
             .filter(|f| {
@@ -1175,7 +1243,7 @@ pub fn tool_audit(
             "unrecognized_count": unrecognized_files.len(),
             "repo_docs_count": repo_docs.len(),
         },
-        "diagram_format": load_config().diagram_format(),
+        "diagram_format": cfg.diagram_format(),
         "suggested_actions": suggested_actions,
         "agent_instruction": concat!(
             "Present the audit findings to the user. Ask which actions to proceed with. ",
@@ -2171,5 +2239,46 @@ mod tests {
         let matches = result["matches"].as_array().unwrap();
         assert!(matches.is_empty(), "empty query should return no matches");
         assert_eq!(result["error"].as_str(), Some("empty query"));
+    }
+
+    // -- tool_configure_project --
+
+    #[test]
+    fn configure_project_creates_alcove_toml_in_repo_root() {
+        let repo = TempDir::new().unwrap();
+        let args = json!({
+            "project_name": "myproj",
+            "diagram_format": "plantuml"
+        });
+        let result = tool_configure_project(repo.path(), args).unwrap();
+        assert_eq!(result["project_name"], "myproj");
+
+        // alcove.toml must be written in the repo root
+        let toml_path = repo.path().join("alcove.toml");
+        assert!(toml_path.exists());
+        let contents = fs::read_to_string(&toml_path).unwrap();
+        assert!(contents.contains("plantuml"));
+    }
+
+    #[test]
+    fn configure_project_updates_existing_preserves_other_fields() {
+        let repo = TempDir::new().unwrap();
+        // First call: set core_files
+        tool_configure_project(
+            repo.path(),
+            json!({"project_name": "myproj", "core_files": ["SPEC.md"]}),
+        )
+        .unwrap();
+        // Second call: set diagram_format only
+        tool_configure_project(
+            repo.path(),
+            json!({"project_name": "myproj", "diagram_format": "plantuml"}),
+        )
+        .unwrap();
+
+        // Both settings must be present
+        let cfg = crate::config::load_project_config(repo.path());
+        assert_eq!(cfg.diagram_format(), "plantuml");
+        assert_eq!(cfg.core_files(), vec!["SPEC.md"]);
     }
 }
