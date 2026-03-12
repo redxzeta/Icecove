@@ -11,7 +11,7 @@ use tantivy::tokenizer::{LowerCaser, NgramTokenizer, TextAnalyzer};
 use tantivy::{Index, IndexWriter, ReloadPolicy, TantivyDocument};
 use walkdir::WalkDir;
 
-use crate::config::{is_doc_file, load_config};
+use crate::config::{effective_config, load_config};
 
 const NGRAM_TOKENIZER: &str = "cjk_ngram";
 
@@ -276,10 +276,11 @@ pub fn check_doc_changes(docs_root: &Path) -> JsonValue {
         if name.starts_with('.') || name.starts_with('_') || name == "mcp" || name == "skills" {
             continue;
         }
+        let proj_cfg = effective_config(&path);
         for walk_entry in WalkDir::new(&path)
             .into_iter()
             .filter_map(std::result::Result::ok)
-            .filter(|e| e.file_type().is_file() && is_doc_file(e.path()))
+            .filter(|e| e.file_type().is_file() && proj_cfg.is_indexable(e.path()))
         {
             let file_path = walk_entry.path();
             let rel = file_path
@@ -346,10 +347,11 @@ pub fn is_index_stale(docs_root: &Path) -> bool {
         if name.starts_with('.') || name.starts_with('_') || name == "mcp" || name == "skills" {
             continue;
         }
+        let proj_cfg = effective_config(&path);
         for walk_entry in WalkDir::new(&path)
             .into_iter()
             .filter_map(std::result::Result::ok)
-            .filter(|e| e.file_type().is_file() && crate::config::is_doc_file(e.path()))
+            .filter(|e| e.file_type().is_file() && proj_cfg.is_indexable(e.path()))
         {
             let file_path = walk_entry.path();
             let rel = file_path
@@ -443,10 +445,11 @@ fn build_index_inner(docs_root: &Path) -> Result<JsonValue> {
         }
         project_count += 1;
 
+        let proj_cfg = effective_config(&path);
         for walk_entry in WalkDir::new(&path)
             .into_iter()
             .filter_map(std::result::Result::ok)
-            .filter(|e| e.file_type().is_file() && is_doc_file(e.path()))
+            .filter(|e| e.file_type().is_file() && proj_cfg.is_indexable(e.path()))
         {
             let file_path = walk_entry.path().to_path_buf();
             let rel = file_path
@@ -507,10 +510,11 @@ fn build_index_inner(docs_root: &Path) -> Result<JsonValue> {
                 continue;
             }
 
+            let proj_cfg = effective_config(&path);
             for walk_entry in WalkDir::new(&path)
                 .into_iter()
                 .filter_map(std::result::Result::ok)
-                .filter(|e| e.file_type().is_file() && is_doc_file(e.path()))
+                .filter(|e| e.file_type().is_file() && proj_cfg.is_indexable(e.path()))
             {
                 let file_path = walk_entry.path();
                 let content = match std::fs::read_to_string(file_path) {

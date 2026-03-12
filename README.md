@@ -77,6 +77,24 @@ Alcove doesn't inject your docs. **Agents search for what they need, when they n
 
 **Switch agents anytime. Switch projects anytime. The document layer stays standardized.**
 
+## The right split
+
+**`CLAUDE.md` / `AGENTS.md`** is for agent behavior: repeated mistakes to avoid, coding conventions, and session-specific instructions. Keep it under 200 lines.
+
+**Alcove** is for project knowledge: architecture, decisions, runbooks, API docs, and anything else your agent needs to understand — but not necessarily on every run.
+
+The pattern:
+```
+CLAUDE.md | AGENTS.md                             ← agent rules, coding conventions, recurring corrections
+~/.config/alcove/docs/my-app/
+  ARCHITECTURE.md                      ← tech stack, data model, system design
+  DECISIONS.md                         ← why X was chosen over Y
+  DEBT.md                              ← known issues, workarounds
+  ...                                  ← agent searches here when it needs context
+```
+
+Agents call `search_project_docs("auth flow")` and get the 2 most relevant docs — not all 12. Nothing hits the context window unless it's actually needed.
+
 ## Why Alcove
 
 > **Why not just use `CLAUDE.md`?** Short conventions and agent behaviors belong there. Project documentation — architecture, decisions, runbooks, PRDs — doesn't scale in a context file. Alcove is not a replacement; it's the layer `CLAUDE.md` was never meant to be.

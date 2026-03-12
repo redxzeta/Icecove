@@ -193,3 +193,20 @@ If still ambiguous, prefer `audit_project` as the broadest starting point.
 
 ### Before writing code
 Always check `CONVENTIONS.md` first to ensure generated code follows project-specific rules (naming, error handling, import order, forbidden patterns).
+
+### After a development session
+
+When a significant chunk of work is done — a feature complete, a bug fixed, a decision made — capture what was learned before the context is gone.
+
+1. **Identify what changed** — new decisions, discovered constraints, corrected assumptions, recurring patterns
+2. **Map to the right doc**:
+   - Architectural structure change (new service, data model, directory layout) → `ARCHITECTURE.md`
+   - Decision rationale (why X was chosen over Y) → `DECISIONS.md`
+   - Discovered bug or workaround → `DEBT.md`
+   - Coding pattern that should be followed → `CONVENTIONS.md`
+   - New env variable or secret → `SECRETS_MAP.md`
+   - Progress update → `PROGRESS.md`
+3. **Read and update** — `get_doc_file` the target doc, append the new entry with today's date
+4. **Rebuild index** — `check_doc_changes` then `rebuild_index` so the update is searchable
+
+Do this proactively at natural stopping points, not just when the user asks. The goal is that the next session starts with current context — no re-explaining what was already figured out.

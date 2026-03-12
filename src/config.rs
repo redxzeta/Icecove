@@ -122,6 +122,10 @@ pub struct DocConfig {
     pub diagram: Option<DiagramConfig>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub index: Option<IndexConfig>,
+    /// Additional file extensions to include in the search index.
+    /// Example: `extra_extensions = ["yaml", "json"]`
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub extra_extensions: Option<Vec<String>>,
 }
 
 impl Default for DocConfig {
@@ -133,6 +137,7 @@ impl Default for DocConfig {
             public: None,
             diagram: None,
             index: None,
+            extra_extensions: None,
         }
     }
 }
@@ -148,6 +153,7 @@ impl DocConfig {
             public: self.public.clone().or_else(|| base.public.clone()),
             diagram: self.diagram.clone().or_else(|| base.diagram.clone()),
             index: self.index.clone().or_else(|| base.index.clone()),
+            extra_extensions: self.extra_extensions.clone().or_else(|| base.extra_extensions.clone()),
         }
     }
 
@@ -202,6 +208,23 @@ impl DocConfig {
             .map_or_else(default_index_buffer_mb, |i| i.buffer_size_mb)
             * 1_000_000
     }
+
+    /// Returns true if the file should be included in the search index.
+    /// Extends `is_doc_file` with any user-configured extra extensions.
+    ///
+    /// Extensions are matched case-insensitively and may optionally include a
+    /// leading dot (e.g. `"yaml"` and `".yaml"` both match `.yaml` files).
+    pub fn is_indexable(&self, path: &Path) -> bool {
+        if is_doc_file(path) {
+            return true;
+        }
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+        self.extra_extensions
+            .as_deref()
+            .unwrap_or(&[])
+            .iter()
+            .any(|e| e.trim_start_matches('.').to_lowercase() == ext)
+    }
 }
 
 /// Default docs root: `~/.config/alcove/docs`
@@ -238,6 +261,7 @@ pub fn load_config() -> &'static DocConfig {
             public: None,
             diagram: None,
             index: None,
+            extra_extensions: None,
         }
     })
 }
@@ -522,14 +546,7 @@ mod tests {
 
     #[test]
     fn config_defaults_when_empty() {
-        let cfg = DocConfig {
-            docs_root: None,
-            core: None,
-            team: None,
-            public: None,
-            diagram: None,
-            index: None,
-        };
+        let cfg = DocConfig::default();
         assert_eq!(cfg.core_files().len(), DOC_REPO_REQUIRED.len());
         assert_eq!(cfg.team_files().len(), DOC_REPO_SUPPLEMENTARY.len());
         assert_eq!(cfg.public_files().len(), PROJECT_REPO_FILES.len());
@@ -539,14 +556,10 @@ mod tests {
     #[test]
     fn config_custom_core_files() {
         let cfg = DocConfig {
-            docs_root: None,
             core: Some(CategoryConfig {
                 files: vec!["CUSTOM.md".into(), "OTHER.md".into()],
             }),
-            team: None,
-            public: None,
-            diagram: None,
-            index: None,
+            ..DocConfig::default()
         };
         assert_eq!(cfg.core_files(), vec!["CUSTOM.md", "OTHER.md"]);
         assert_eq!(cfg.team_files().len(), DOC_REPO_SUPPLEMENTARY.len());
@@ -562,25 +575,14 @@ mod tests {
     fn docs_root_returns_explicit_value() {
         let cfg = DocConfig {
             docs_root: Some("/tmp/explicit".into()),
-            core: None,
-            team: None,
-            public: None,
-            diagram: None,
-            index: None,
+            ..DocConfig::default()
         };
         assert_eq!(cfg.docs_root(), Some(PathBuf::from("/tmp/explicit")));
     }
 
     #[test]
     fn docs_root_returns_none_when_no_config_and_no_default_dir() {
-        let cfg = DocConfig {
-            docs_root: None,
-            core: None,
-            team: None,
-            public: None,
-            diagram: None,
-            index: None,
-        };
+        let cfg = DocConfig::default();
         // If ~/.config/alcove/docs doesn't exist, returns None
         // (it may or may not exist on the test machine, so just verify it's a valid Option)
         let result = cfg.docs_root();
@@ -740,5 +742,90 @@ format = "plantuml"
     fn project_config_path_is_in_project_dir() {
         let path = project_config_path(Path::new("/my/project"));
         assert_eq!(path, PathBuf::from("/my/project/alcove.toml"));
+    }
+
+    // -- is_indexable --
+
+    #[test]
+    fn is_indexable_falls_back_to_is_doc_file() {
+        let cfg = DocConfig::default();
+        assert!(cfg.is_indexable(Path::new("README.md")));
+        assert!(cfg.is_indexable(Path::new("notes.txt")));
+        assert!(!cfg.is_indexable(Path::new("main.rs")));
+        assert!(!cfg.is_indexable(Path::new("config.toml")));
+    }
+
+    #[test]
+    fn is_indexable_respects_extra_extensions() {
+        let cfg = DocConfig {
+            extra_extensions: Some(vec!["toml".into(), "yaml".into()]),
+            ..DocConfig::default()
+        };
+        assert!(cfg.is_indexable(Path::new("config.toml")));
+        assert!(cfg.is_indexable(Path::new("schema.yaml")));
+        assert!(!cfg.is_indexable(Path::new("main.rs")));
+    }
+
+    #[test]
+    fn is_indexable_handles_dot_prefixed_extensions() {
+        let cfg = DocConfig {
+            extra_extensions: Some(vec![".toml".into(), ".yaml".into()]),
+            ..DocConfig::default()
+        };
+        assert!(cfg.is_indexable(Path::new("config.toml")));
+        assert!(cfg.is_indexable(Path::new("schema.yaml")));
+    }
+
+    #[test]
+    fn is_indexable_case_insensitive() {
+        let cfg = DocConfig {
+            extra_extensions: Some(vec!["TOML".into()]),
+            ..DocConfig::default()
+        };
+        assert!(cfg.is_indexable(Path::new("config.toml")));
+        assert!(cfg.is_indexable(Path::new("config.TOML")));
+    }
+
+    #[test]
+    fn is_indexable_no_double_count_for_md() {
+        // .md is already handled by is_doc_file; extra_extensions has no effect
+        let cfg = DocConfig {
+            extra_extensions: Some(vec!["md".into()]),
+            ..DocConfig::default()
+        };
+        assert!(cfg.is_indexable(Path::new("README.md")));
+    }
+
+    #[test]
+    fn extra_extensions_overlay_project_wins() {
+        let base = DocConfig {
+            extra_extensions: Some(vec!["toml".into()]),
+            ..DocConfig::default()
+        };
+        let project = DocConfig {
+            extra_extensions: Some(vec!["yaml".into()]),
+            ..DocConfig::default()
+        };
+        let merged = project.overlay(&base);
+        let exts = merged.extra_extensions.unwrap_or_default();
+        assert_eq!(exts, vec!["yaml"]);
+    }
+
+    #[test]
+    fn extra_extensions_overlay_base_fills_when_project_unset() {
+        let base = DocConfig {
+            extra_extensions: Some(vec!["toml".into()]),
+            ..DocConfig::default()
+        };
+        let merged = DocConfig::default().overlay(&base);
+        let exts = merged.extra_extensions.unwrap_or_default();
+        assert_eq!(exts, vec!["toml"]);
+    }
+
+    #[test]
+    fn extra_extensions_toml_deserialization() {
+        let toml = r#"extra_extensions = ["yaml", "json"]"#;
+        let cfg: DocConfig = toml::from_str(toml).unwrap();
+        assert_eq!(cfg.extra_extensions.unwrap_or_default(), vec!["yaml", "json"]);
     }
 }
